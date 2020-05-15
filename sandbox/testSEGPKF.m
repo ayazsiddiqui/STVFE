@@ -17,7 +17,7 @@ heights = heights(:);
 meanFlow = 10;
 noTP = numel(heights);
 % time in minutes
-timeStep = 0.05*2;
+timeStep = 0.05*4;
 tVec = 0:timeStep:1*60;
 noTimeSteps = numel(tVec);
 % time in seconds
@@ -65,7 +65,7 @@ xMeasure = xDomain;
 % % % make a finer domain over which predictions are made
 xPredict = linspace(heights(1),heights(end),1*numel(heights));
 % % % order of approixation for SE kernel
-Nn = 2;
+Nn = 6;
 % form the initialization matrices
 initCons = gpkf.squaredExponentialGpkfInitialize(xDomain,...
     optHyperParams(end-1),timeStep,Nn);
