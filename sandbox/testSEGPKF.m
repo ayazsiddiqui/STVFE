@@ -28,8 +28,6 @@ stdDev = 1;
 timeScale = 10;
 heightScale = 200;
 % generate data
-% windSpeedOut = meanFlow*(1 + ...
-% genWindv2(heights,heightScale,tVec,timeScale,stdDev));
 windSpeedOut = genWindv2(heights,heightScale,tVec,timeScale,stdDev);
 heights2 = repmat(heights,1,noTimeSteps);
 tVec2 = repmat(tVec(:)',noTP,1);
@@ -154,8 +152,11 @@ for ii = 1:noIter
     GPstdDev(:,ii) = sqrt(gpkf.removeEPS(GPpostVar(:,ii),5));
     % % % upper bounds = mean + x*(standard deviation)
     GPupperBound(:,ii) = GPpredMean(:,ii) + 1*GPstdDev(:,ii);
-    % % %lower bounds = mean + x*(standard deviation)
+    % % % lower bounds = mean + x*(standard deviation)
     GPlowerBound(:,ii) = GPpredMean(:,ii) - 1*GPstdDev(:,ii);
+    % % % percentage completion
+    GPtxt = fprintf('Traditional GP Percentage completion = %0.2f%% \n',...
+        100*ii/noIter);
 end
 
 

@@ -1,6 +1,7 @@
 classdef GPKF
-    %GPKF Summary of this class goes here
-    %   Detailed explanation goes here
+    %GPKF classdef containing various functions for performing operations
+    %using the Gassian process kalman filter
+    %   gpkf = GPKF(n) where n is the number of spatial inputs
     
     %% properties
     properties
