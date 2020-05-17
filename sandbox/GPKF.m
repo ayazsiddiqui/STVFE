@@ -6,14 +6,23 @@ classdef GPKF
     %% properties
     properties
         noSpatialIps
+        temporalKernel
     end
     
     %% methods
     methods
         
         % % % %         constructor
-        function obj = GPKF(noSpatialIps)
+        function obj = GPKF(noSpatialIps,temporalKernel)
             obj.noSpatialIps = noSpatialIps;
+            if strcmp(temporalKernel,'exponential') || ...
+                    strcmp(temporalKernel,'squaredExponential')
+                obj.temporalKernel = temporalKernel;
+            else
+                error(['Only ''exponential'' and ',...
+                    '''squaredExponential'' are valid entries. '...
+                    'You enterd %s. \n'],temporalKernel)
+            end
         end
         
         % % % %         spatial kernel: squared exponential
@@ -23,7 +32,7 @@ classdef GPKF
         end
         
         % % % %         spatial kernel: squared exponential
-        function val = spatialKernel(obj,s1,s2,covAmp,lengthScales)
+        function val = spatialCovariance(obj,s1,s2,covAmp,lengthScales)
             % % covariance equations
             val = covAmp*exp(-0.5*(s1-s2)'*(eye(obj.noSpatialIps)...
                 ./lengthScales.^2)*(s1-s2));
@@ -38,7 +47,7 @@ classdef GPKF
             % form lower triangular covariance matrix for covMat
             for ii = 1:noPts
                 for jj = ii:noPts
-                    covMat(ii,jj) = obj.spatialKernel(x(:,ii),x(:,jj),...
+                    covMat(ii,jj) = obj.spatialCovariance(x(:,ii),x(:,jj),...
                         covAmp,lengthScales);
                 end
             end
@@ -47,9 +56,14 @@ classdef GPKF
         end
         
         % % % %         temporal kernel: exponential
-        function val = temporalKernel(obj,t1,t2,timeScale)
+        function val = temporalCovariance(obj,t1,t2,timeScale)
             % % covariance equation
-            val = 1*exp(-0.5*((t1-t2)^2)/timeScale^2);
+            switch obj.temporalKernel
+                case 'exponential'
+                    val = 1*exp(-abs(t2-t1)/timeScale);
+                case 'squaredExponential'
+                    val = 1*exp(-0.5*((t2-t1)^2)/timeScale^2);
+            end
         end
         
         % % % %         calculate covaraince as a product of the two covariances
@@ -61,8 +75,8 @@ classdef GPKF
             % % time scale
             timeScale = hyperParams(obj.noSpatialIps+2);
             % % k = k_s*k_t
-            val = obj.spatialKernel(x1(1:end-1),x2(1:end-1),covAmp,lenScale)...
-                *obj.temporalKernel(x1(end),x2(end),timeScale);
+            val = obj.spatialCovariance(x1(1:end-1),x2(1:end-1),covAmp,lenScale)...
+                *obj.temporalCovariance(x1(end),x2(end),timeScale);
         end
         
         % % % %         form covariance matrix and mean vector
@@ -103,24 +117,111 @@ classdef GPKF
             logP = - dataFit - complexPen - normConstant;
         end
         
-        % % % %         exponential kernel GPKF initialization
-        function val = exponentialGpkfInitialize(obj,xDomain,timeScale,timeStep)
+        % % % %         GPKF initialization
+        function val = GpkfInitialize(obj,xDomain,timeScale,...
+                timeStep,varargin)
+            % % parse inputs
+            pp = inputParser;
+            addParameter(pp,'approximationOrder',6,@(x) isnumeric(x));
+            parse(pp,varargin{:});
+            N = pp.Results.approximationOrder;
+            
             % % total number of points in the entire domain of interest
             xDomainNP = size(xDomain,2);
-            % % calculate F,H,Q as per Carron Eqn. (14)
-            F = exp(-timeStep/timeScale);
-            H = sqrt(2/timeScale);
-            G = 1;
-            Q = (1 - exp(-2*timeStep/timeScale))/(2/timeScale);
-            % % solve the Lyapunov equation for X
-            sigma0 = lyap(F,G*G');
-            % % outputs
-            val.Amat = eye(xDomainNP)*F;
-            val.Hmat = eye(xDomainNP)*H;
-            val.Qmat = eye(xDomainNP)*Q;
-            val.sig0Mat = eye(xDomainNP)*sigma0;
-            val.s0 = zeros(xDomainNP,1); 
             
+            switch obj.temporalKernel
+                case 'exponential'
+                    % % calculate F,H,Q as per Carron Eqn. (14)
+                    F = exp(-timeStep/timeScale);
+                    H = sqrt(2/timeScale);
+                    G = 1;
+                    Q = (1 - exp(-2*timeStep/timeScale))/(2/timeScale);
+                    % % solve the Lyapunov equation for X
+                    sigma0 = lyap(F,G*G');
+                    % % outputs
+                    val.Amat = eye(xDomainNP)*F;
+                    val.Hmat = eye(xDomainNP)*H;
+                    val.Qmat = eye(xDomainNP)*Q;
+                    val.sig0Mat = eye(xDomainNP)*sigma0;
+                    val.s0 = zeros(xDomainNP,1);
+                    
+                case 'squaredExponential'
+                    % % find the transfer function as per the Hartinkainen paper
+                    syms x
+                    px = 0;
+                    % % Hartinkainen paper Eqn. (11)
+                    for n = 0:N
+                        px = px + ((x^(2*n))*factorial(N)*((-1)^n)*...
+                            (2/(timeScale^2))^(N-n))...
+                            /factorial(n);
+                    end
+                    % % find the roots of the above polynomial
+                    rts = vpasolve(px,x);
+                    % % locate the roots with negative real parts
+                    negReal = rts(real(rts) < 0);
+                    % % make transfer function out of the negative real parts roots
+                    H_iw = vpa(expand(prod(x-negReal)));
+                    % % find the coefficients of the polynomial
+                    coEffs = coeffs(H_iw,x);
+                    % break the coefficients in real and imaginary parts and
+                    % eliminate numbers lower than eps
+                    coEffs = obj.removeEPS(coEffs,6);
+                    % % normalize them by dividing by the highest degree
+                    % % coefficient
+                    coEffs = coEffs./coEffs(end);
+                    % % form the F, G, and H matrices as per Carron Eqn. (8)
+                    F = [zeros(N-1,1) eye(N-1); -coEffs(1:end-1)];
+                    G = [zeros(N-1,1);1];
+                    % % calculate the numerator
+                    b0 = sqrt((timeScale^2)*factorial(N)*((2/(timeScale^2))^N)...
+                        *sqrt(pi*2*timeScale^2));
+                    H = [b0 zeros(1,N-1)];
+                    sigma0 = obj.removeEPS(lyap(F,G*G'),6);
+                    % % calculate the discretized values
+                    syms tau
+                    % % use cayley hamilton theorem to calcualte e^Ft
+                    eFt = obj.cayleyHamilton(F);
+                    % % calculate Fbar using the above expression
+                    Fbar = obj.removeEPS(subs(eFt,tau,timeStep),6);
+                    % % evaluate Qbar, very computationally expensive
+                    Qsym = eFt*(G*G')*eFt';
+                    Qint = NaN(N);
+                    for ii = 1:N^2
+                        fun = matlabFunction(Qsym(ii));
+                        Qint(ii) = integral(fun,0,timeStep);
+                    end
+                    % % remove numbers lower than eps
+                    Qbar = obj.removeEPS(Qint,6);
+                    % % outputs
+                    % initialize matrices as cell matrices
+                    Amat = cell(xDomainNP);
+                    Hmat = cell(xDomainNP);
+                    Qmat = cell(xDomainNP);
+                    sig0Mat = cell(xDomainNP);
+                    
+                    % form the block diagonal matrices
+                    for ii = 1:xDomainNP
+                        for jj = 1:xDomainNP
+                            if ii == jj
+                                Amat{ii,jj} = Fbar;
+                                Hmat{ii,jj} = H;
+                                Qmat{ii,jj} = Qbar;
+                                sig0Mat{ii,jj} = sigma0;
+                            else
+                                Amat{ii,jj} = zeros(N);
+                                Hmat{ii,jj} = zeros(1,N);
+                                Qmat{ii,jj} = zeros(N);
+                                sig0Mat{ii,jj} = zeros(N);
+                            end
+                        end
+                    end
+                    % convert them to matrices and send to output structure
+                    val.Amat = cell2mat(Amat);
+                    val.Hmat = cell2mat(Hmat);
+                    val.Qmat = cell2mat(Qmat);
+                    val.sig0Mat = cell2mat(sig0Mat);
+                    val.s0 = zeros(xDomainNP*N,1);
+            end
         end
         
         % % % %         Cayley Hamilton theorem implementation
@@ -163,89 +264,6 @@ classdef GPKF
             imagParts(imagParts <= eps) = 0;
             % round up to nRound decimal places
             val = round(realParts,nRound) + 1i*round(imagParts,nRound);
-        end
-        
-        % % % %         squared exponential kernel GPKF initialization
-        function val = squaredExponentialGpkfInitialize(obj,xDomain,timeScale,...
-                timeStep,N)
-            % % total number of points in the entire domain of interest
-            xDomainNP = size(xDomain,2);
-            % % find the transfer function as per the Hartinkainen paper
-            syms x
-            px = 0;
-            % % Hartinkainen paper Eqn. (11)
-            for n = 0:N
-                px = px + ((x^(2*n))*factorial(N)*((-1)^n)*...
-                    (2/(timeScale^2))^(N-n))...
-                    /factorial(n);
-            end
-            % % find the roots of the above polynomial
-            rts = vpasolve(px,x);
-            % % locate the roots with negative real parts
-            negReal = rts(real(rts) < 0);
-            % % make transfer function out of the negative real parts roots
-            H_iw = vpa(expand(prod(x-negReal)));
-            % % find the coefficients of the polynomial
-            coEffs = coeffs(H_iw,x);
-            % break the coefficients in real and imaginary parts and
-            % eliminate numbers lower than eps
-            coEffs = obj.removeEPS(coEffs,6);
-            % % normalize them by dividing by the highest degree
-            % % coefficient
-            coEffs = coEffs./coEffs(end);
-            % % form the F, G, and H matrices as per Carron Eqn. (8)
-            F = [zeros(N-1,1) eye(N-1); -coEffs(1:end-1)];
-            G = [zeros(N-1,1);1];
-            % % calculate the numerator
-            b0 = sqrt((timeScale^2)*factorial(N)*((2/(timeScale^2))^N)...
-                *sqrt(pi*2*timeScale^2));
-            H = [b0 zeros(1,N-1)];
-            sigma0 = obj.removeEPS(lyap(F,G*G'),6);
-            % % calculate the discretized values
-            syms tau
-            % % use cayley hamilton theorem to calcualte e^Ft
-            eFt = obj.cayleyHamilton(F);
-            % % calculate Fbar using the above expression
-            Fbar = obj.removeEPS(subs(eFt,tau,timeStep),6);
-            % % evaluate Qbar, very computationally expensive
-            Qsym = eFt*(G*G')*eFt';
-            Qint = NaN(N);
-            for ii = 1:N^2
-                fun = matlabFunction(Qsym(ii));
-                Qint(ii) = integral(fun,0,timeStep);
-            end
-            % % remove numbers lower than eps
-            Qbar = obj.removeEPS(Qint,6);
-            % % outputs
-            % initialize matrices as cell matrices
-            Amat = cell(xDomainNP);
-            Hmat = cell(xDomainNP);
-            Qmat = cell(xDomainNP);
-            sig0Mat = cell(xDomainNP);
-                        
-            % form the block diagonal matrices
-            for ii = 1:xDomainNP
-                for jj = 1:xDomainNP
-                    if ii == jj
-                        Amat{ii,jj} = Fbar;
-                        Hmat{ii,jj} = H;
-                        Qmat{ii,jj} = Qbar;
-                        sig0Mat{ii,jj} = sigma0;                        
-                    else
-                        Amat{ii,jj} = zeros(N);
-                        Hmat{ii,jj} = zeros(1,N);
-                        Qmat{ii,jj} = zeros(N);
-                        sig0Mat{ii,jj} = zeros(N);
-                    end
-                end
-            end
-            % convert them to matrices and send to output structure
-            val.Amat = cell2mat(Amat);
-            val.Hmat = cell2mat(Hmat);
-            val.Qmat = cell2mat(Qmat);
-            val.sig0Mat = cell2mat(sig0Mat);
-            val.s0 = zeros(xDomainNP*N,1);            
-            
         end
         
         % % % %         Kalman estimation as per jp Algorithm 1
@@ -293,7 +311,7 @@ classdef GPKF
             timeScale = hyperParam(end-1);
             % % Regression as per section 5 of Todescato journal paper
             % % temporations kernel value at tau = 0
-            h0 = obj.temporalKernel(0,0,timeScale);
+            h0 = obj.temporalCovariance(0,0,timeScale);
             % % multiply the spatial covariance matrix by h0
             Vf = h0*Ks;
             % % preallocate matrices
@@ -304,10 +322,10 @@ classdef GPKF
             % % perform regression on each point in the domain
             for ii = 1:xPredictNp
                 for jj = 1:xDomainNP
-                sigmaX(ii,jj) = h0*obj.spatialKernel(xPredict(:,ii),xDomain(:,jj)...
-                    ,covAmp,lengthScales);
+                    sigmaX(ii,jj) = h0*obj.spatialCovariance(xPredict(:,ii),xDomain(:,jj)...
+                        ,covAmp,lengthScales);
                 end
-                Vx(ii,1) = h0*obj.spatialKernel(xPredict(:,ii),xPredict(:,ii)...
+                Vx(ii,1) = h0*obj.spatialCovariance(xPredict(:,ii),xPredict(:,ii)...
                     ,covAmp,lengthScales);
                 % % predicted mean as per Todescato Eqn. (17)
                 predMean(ii,1) = sigmaX(ii,:)*(Vf\F_t);
@@ -337,8 +355,8 @@ classdef GPKF
             % % calculate prediction mean and covariance
             for ii = 1:xPredictNp
                 for jj = 1:xVisitedNp
-                Kxstar_x(ii,jj) = obj.calcTotCovariance(xPredictNew(:,ii)...
-                    ,xVisited(:,jj),hyperParams);
+                    Kxstar_x(ii,jj) = obj.calcTotCovariance(xPredictNew(:,ii)...
+                        ,xVisited(:,jj),hyperParams);
                 end
                 predMean(ii,1) = Kxstar_x(ii,:)*(covMat\yVisited);
                 postVar(ii,1) = obj.calcTotCovariance(xPredictNew(:,ii),...
