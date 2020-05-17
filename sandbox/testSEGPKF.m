@@ -17,7 +17,7 @@ heights = heights(:);
 meanFlow = 10;
 noTP = numel(heights);
 % time in minutes
-timeStep = 0.05*4;
+timeStep = 0.05*5;
 tVec = 0:timeStep:1*60;
 noTimeSteps = numel(tVec);
 % time in seconds
@@ -92,6 +92,7 @@ lowerBound = NaN(size(xPredict,2),noIter);
 pointsVisited = NaN(nVisit,noIter);
 fValAtPt = NaN(noIter,nVisit);
 GPKFcompTime = NaN(1,noIter);
+GPKFfit = NaN(1,noIter);
 
 for ii = 1:noIter
     % % % visit said points
@@ -110,10 +111,13 @@ for ii = 1:noIter
     [F_t,sigF_t,skp1_kp1,ckp1_kp1] = ...
         gpkf.gpkfKalmanEstimation(xMeasure,sk_k,ck_k,Mk,yk,...
         Ks_12,initCons.Amat,initCons.Qmat,initCons.Hmat,optHyperParams(end));
-    GPKFcompTime(ii) = toc;
     % % % regression over a finer domain
     [predMean(:,ii),postVar(:,ii)] = gpkf.gpkfRegression(xDomain,xPredict,...
         F_t,sigF_t,Ks,optHyperParams);
+    GPKFcompTime(ii) = toc;
+    % % % percentage fit
+    GPKFfit(ii) = 100*(1 - (norm(predMean(:,ii)-windSpeedOut(:,ii))/...
+        max([norm(windSpeedOut(:,ii)),eps])));
     % % % remove real or imaginary parts lower than eps
     stdDev(:,ii) = sqrt(gpkf.removeEPS(postVar(:,ii),5));
     % % % upper bounds = mean + x*(standard deviation)
@@ -136,6 +140,7 @@ GPstdDev =  NaN(size(xPredict,2),noIter);
 GPupperBound = NaN(size(xPredict,2),noIter);
 GPlowerBound = NaN(size(xPredict,2),noIter);
 GPcompTime = NaN(1,noIter);
+GPfit = NaN(1,noIter);
 
 for ii = 1:noIter
     % % % all points visited and y at values upto step ii
@@ -148,6 +153,9 @@ for ii = 1:noIter
     [GPpredMean(:,ii),GPpostVar(:,ii)] = gpkf.traditionalGpRegression(xVisited,...
         yVisited,xPredict,tPredict,optHyperParams);
     GPcompTime(ii) = toc;
+    % % % percentage fit
+    GPfit(ii) = 100*(1 - (norm(GPpredMean(:,ii)-windSpeedOut(:,ii))/...
+        max([norm(windSpeedOut(:,ii)),eps])));
     % % % remove real or imaginary parts lower than eps
     GPstdDev(:,ii) = sqrt(gpkf.removeEPS(GPpostVar(:,ii),5));
     % % % upper bounds = mean + x*(standard deviation)
@@ -226,6 +234,9 @@ end
 
 % % % % computational time plot
 figure(2)
+x = gcf;
+set(gcf,'position',x.Position.*[1 0 1 2])
+subplot(2,1,1)
 pGPC = plot(1:noIter,GPcompTime,'linewidth',lwd,'color',...
     1/255*[55,126,184]);
 hold on
@@ -238,26 +249,38 @@ ylabel('Computational time (sec)')
 legend([pGPC,pGPKFC],{'GP','GPKF'},'location','best')
 title(sprintf('Time step = %0.3f sec',timeStep))
 
+subplot(2,1,2)
+pGPFit = plot(1:noIter,GPfit,'linewidth',lwd,'color',...
+    1/255*[55,126,184]);
+hold on
+grid on
+pGPKFFit = plot(1:noIter,GPKFfit,'linewidth',lwd,...
+    'color',1/255*[228,26,28]);
+xlabel('Time step number')
+ylabel('Fit (\%)')
+legend([pGPFit,pGPKFFit],{'GP','GPKF'},'location','best')
+
+
 %% save data to output folder
-[status, msg, msgID] = mkdir(pwd,'outputs');
-fName = [pwd,'\outputs\',strrep(datestr(datetime),':','_')];
-
-% delete([pwd,'\outputs\*.mat'])
-% delete([pwd,'\outputs\*.avi'])
-
-save(fName)
-
-%% video
-% % % % video setting
-video = VideoWriter(fName,'Motion JPEG AVI');
-% % video = VideoWriter('vid_Test1','MPEG-4');
-video.FrameRate = 3;
-set(gca,'nextplot','replacechildren');
-
-open(video)
-for ii = 1:length(F)
-    writeVideo(video, F(ii));
-end
-close(video)
+% [status, msg, msgID] = mkdir(pwd,'outputs');
+% fName = [pwd,'\outputs\',strrep(datestr(datetime),':','_')];
+% 
+% % delete([pwd,'\outputs\*.mat'])
+% % delete([pwd,'\outputs\*.avi'])
+% 
+% save(fName)
+% 
+% %% video
+% % % % % video setting
+% video = VideoWriter(fName,'Motion JPEG AVI');
+% % % video = VideoWriter('vid_Test1','MPEG-4');
+% video.FrameRate = 3;
+% set(gca,'nextplot','replacechildren');
+% 
+% open(video)
+% for ii = 1:length(F)
+%     writeVideo(video, F(ii));
+% end
+% close(video)
 
 
