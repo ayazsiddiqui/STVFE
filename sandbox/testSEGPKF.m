@@ -45,8 +45,8 @@ Heights = timeseries(repmat(heights,1,1,2),[0 simTime]);
 Flows = timeseries(Flows,timeInSec);
 
 %% set up the KFGP classdef
-% construct an instance of the RGP class
-gpkf = GPKF(1,'squaredExponential');
+% construct an instance of the RGP class: squaredExponential or exponential
+gpkf = GPKF(1,'exponential');
 % set values of hyper parameters
 noiseVar = 0.01;
 hyperParams = [1 heightScale timeScale noiseVar]';
@@ -187,7 +187,7 @@ for ii = 1:noTimeSteps
         delete(findall(gcf,'type','annotation'));
         h = findall(gca,'type','line','linestyle','-','-or',...
             'linestyle','--','-or','linestyle','-x','-or',...
-            'color','m');
+           'linestyle','-.', '-or','color','m');
         delete(h);
         
     end
@@ -207,9 +207,9 @@ for ii = 1:noTimeSteps
     % % plot GP mean and bounds
     plGPPredMean = plot(GPpredMean(:,ii),xPredict,'-x','linewidth',lwd,...
         'color',1/255*[55,126,184]);
-    plGPLowerBds = plot(GPlowerBound(:,ii),xPredict,'--','linewidth',lwd,...
+    plGPLowerBds = plot(GPlowerBound(:,ii),xPredict,'-.','linewidth',lwd,...
         'color',1/255*[158,188,218]);
-    plGPUpperBds = plot(GPupperBound(:,ii),xPredict,'--','linewidth',lwd,...
+    plGPUpperBds = plot(GPupperBound(:,ii),xPredict,'-.','linewidth',lwd,...
         'color',1/255*[158,188,218]);
     
     legend([plTrueWind,plPredMean,plLowerBds,plGPPredMean,plGPLowerBds],...
