@@ -25,7 +25,7 @@ classdef GPKF
             end
         end
         
-        % % % %         spatial kernel: squared exponential
+        % % % %         mean function 
         function val = meanFunction(obj,x)
             % % zero mean function
             val = 0*(x'*x)*obj.noSpatialIps;
@@ -122,7 +122,9 @@ classdef GPKF
                 timeStep,varargin)
             % % parse inputs
             pp = inputParser;
-            addParameter(pp,'approximationOrder',6,@(x) isnumeric(x));
+            addParameter(pp,'approximationOrder',6,...
+                @(x)assert(isnumeric(x) && ~mod(x,2),...
+                'Value must be even.'));
             parse(pp,varargin{:});
             N = pp.Results.approximationOrder;
             
@@ -165,7 +167,7 @@ classdef GPKF
                     coEffs = coeffs(H_iw,x);
                     % break the coefficients in real and imaginary parts and
                     % eliminate numbers lower than eps
-                    coEffs = obj.removeEPS(coEffs,6);
+                    coEffs = obj.removeEPS(coEffs,10);
                     % % normalize them by dividing by the highest degree
                     % % coefficient
                     coEffs = coEffs./coEffs(end);
@@ -173,16 +175,16 @@ classdef GPKF
                     F = [zeros(N-1,1) eye(N-1); -coEffs(1:end-1)];
                     G = [zeros(N-1,1);1];
                     % % calculate the numerator
-                    b0 = sqrt((timeScale^2)*factorial(N)*((2/(timeScale^2))^N)...
+                    b0 = sqrt(factorial(N)*((2/(timeScale^2))^N)...
                         *sqrt(pi*2*timeScale^2));
                     H = [b0 zeros(1,N-1)];
-                    sigma0 = obj.removeEPS(lyap(F,G*G'),6);
+                    sigma0 = obj.removeEPS(lyap(F,G*G'),10);
                     % % calculate the discretized values
                     syms tau
                     % % use cayley hamilton theorem to calcualte e^Ft
                     eFt = obj.cayleyHamilton(F);
                     % % calculate Fbar using the above expression
-                    Fbar = obj.removeEPS(subs(eFt,tau,timeStep),6);
+                    Fbar = obj.removeEPS(subs(eFt,tau,timeStep),10);
                     % % evaluate Qbar, very computationally expensive
                     Qsym = eFt*(G*G')*eFt';
                     Qint = NaN(N);
@@ -191,7 +193,7 @@ classdef GPKF
                         Qint(ii) = integral(fun,0,timeStep);
                     end
                     % % remove numbers lower than eps
-                    Qbar = obj.removeEPS(Qint,6);
+                    Qbar = obj.removeEPS(Qint,10);
                     % % outputs
                     % initialize matrices as cell matrices
                     Amat = cell(xDomainNP);

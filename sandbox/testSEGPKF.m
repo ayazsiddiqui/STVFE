@@ -46,7 +46,7 @@ Flows = timeseries(Flows,timeInSec);
 
 %% set up the KFGP classdef
 % construct an instance of the RGP class: squaredExponential or exponential
-gpkf = GPKF(1,'exponential');
+gpkf = GPKF(1,'squaredExponential');
 % set values of hyper parameters
 noiseVar = 0.01;
 hyperParams = [1 heightScale timeScale noiseVar]';
@@ -65,10 +65,14 @@ xMeasure = xDomain;
 % % % make a finer domain over which predictions are made
 xPredict = linspace(heights(1),heights(end),1*numel(heights));
 % % % order of approixation for SE kernel
-Nn = 6;
+Nn = 4;
 % form the initialization matrices
 initCons = gpkf.GpkfInitialize(xDomain,...
     optHyperParams(end-1),timeStep,'approximationOrder',Nn);
+
+% initCons = GpkfInitialize(xDomain,...
+%     optHyperParams(end-1),timeStep,'approximationOrder',Nn);
+
 % % % set number of points visited per step
 nVisit = 1;
 % % % initialize parameters
