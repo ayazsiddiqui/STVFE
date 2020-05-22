@@ -17,7 +17,7 @@ heights = heights(:);
 meanFlow = 10;
 noTP = numel(heights);
 % time in minutes
-timeStep = 0.05*5;
+timeStep = 0.05*4;
 tVec = 0:timeStep:1*60;
 noTimeSteps = numel(tVec);
 % time in seconds
@@ -65,7 +65,7 @@ xMeasure = xDomain;
 % % % make a finer domain over which predictions are made
 xPredict = linspace(heights(1),heights(end),1*numel(heights));
 % % % order of approixation for SE kernel
-Nn = 4;
+Nn = 2;
 % form the initialization matrices
 initCons = gpkf.GpkfInitialize(xDomain,...
     optHyperParams(end-1),timeStep,'approximationOrder',Nn);
@@ -226,9 +226,9 @@ for ii = 1:noTimeSteps
     
     legend([plTrueWind,plPredMean,plLowerBds,plGPPredMean,plGPLowerBds],...
         'True func','GPKF $\mu$','GPKF bounds','GP $\mu$','GP bounds')
-    txt = sprintf(['$\\frac{Time ~scale}{Time ~step}$ = %0.2f,'...
-        'Time = %0.2f min'],...
-        timeScale/timeStep,tVec(ii));
+    txt1 = sprintf('$l_{t} / \\tau$ = %0.2f,',timeScale/timeStep);
+    txt = sprintf(' Time = %0.2f min',tVec(ii));
+    txt = strcat(txt1,txt);
     title(txt);
     
     ff = getframe(gcf);
@@ -236,55 +236,58 @@ for ii = 1:noTimeSteps
     
 end
 
+%% other plots
 % % % % computational time plot
 figure(2)
 x = gcf;
-set(gcf,'position',x.Position.*[1 0 1 2])
-subplot(2,1,1)
+set(gcf,'position',x.Position.*[1 0 1 1])
 pGPC = plot(1:noIter,GPcompTime,'linewidth',lwd,'color',...
     1/255*[55,126,184]);
 hold on
 grid on
 pGPKFC = plot(1:noIter,GPKFcompTime,'linewidth',lwd,...
     'color',1/255*[228,26,28]);
-ylim([-0.01 Inf])
+ylim([-0.005 Inf])
 xlabel('Time step number')
 ylabel('Computational time (sec)')
 legend([pGPC,pGPKFC],{'GP','GPKF'},'location','best')
-title(sprintf('Time step = %0.3f sec',timeStep))
 
-subplot(2,1,2)
-pGPFit = plot(1:noIter,GPfit,'linewidth',lwd,'color',...
+figure(3)
+x = gcf;
+set(gcf,'position',x.Position.*[1 0 1 1])
+pGPFit = plot(tVec,GPfit,'linewidth',lwd,'color',...
     1/255*[55,126,184]);
 hold on
 grid on
-pGPKFFit = plot(1:noIter,GPKFfit,'linewidth',lwd,...
+pGPKFFit = plot(tVec,GPKFfit,'linewidth',lwd,...
     'color',1/255*[228,26,28]);
-xlabel('Time step number')
+xlabel('Time (min)')
 ylabel('Fit (\%)')
+ylim([0 100])
 legend([pGPFit,pGPKFFit],{'GP','GPKF'},'location','best')
 
+set(findobj('-property','FontSize'),'FontSize',12)
 
 %% save data to output folder
-% [status, msg, msgID] = mkdir(pwd,'outputs');
-% fName = [pwd,'\outputs\',strrep(datestr(datetime),':','_')];
-% 
-% % delete([pwd,'\outputs\*.mat'])
-% % delete([pwd,'\outputs\*.avi'])
-% 
-% save(fName)
-% 
-% %% video
-% % % % % video setting
-% video = VideoWriter(fName,'Motion JPEG AVI');
-% % % video = VideoWriter('vid_Test1','MPEG-4');
-% video.FrameRate = 3;
-% set(gca,'nextplot','replacechildren');
-% 
-% open(video)
-% for ii = 1:length(F)
-%     writeVideo(video, F(ii));
-% end
-% close(video)
+[status, msg, msgID] = mkdir(pwd,'outputs');
+fName = [pwd,'\outputs\',strrep(datestr(datetime),':','_')];
+
+% delete([pwd,'\outputs\*.mat'])
+% delete([pwd,'\outputs\*.avi'])
+
+save(fName)
+
+%% video
+% % % % video setting
+video = VideoWriter(fName,'Motion JPEG AVI');
+% % video = VideoWriter('vid_Test1','MPEG-4');
+video.FrameRate = 10;
+set(gca,'nextplot','replacechildren');
+
+open(video)
+for ii = 1:length(F)
+    writeVideo(video, F(ii));
+end
+close(video)
 
 

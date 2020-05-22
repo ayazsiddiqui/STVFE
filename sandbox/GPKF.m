@@ -167,7 +167,8 @@ classdef GPKF
                     coEffs = coeffs(H_iw,x);
                     % break the coefficients in real and imaginary parts and
                     % eliminate numbers lower than eps
-                    coEffs = obj.removeEPS(coEffs,10);
+                    nRound = 8;
+                    coEffs = obj.removeEPS(coEffs,nRound);
                     % % normalize them by dividing by the highest degree
                     % % coefficient
                     coEffs = coEffs./coEffs(end);
@@ -178,13 +179,13 @@ classdef GPKF
                     b0 = sqrt(factorial(N)*((2/(timeScale^2))^N)...
                         *sqrt(pi*2*timeScale^2));
                     H = [b0 zeros(1,N-1)];
-                    sigma0 = obj.removeEPS(lyap(F,G*G'),10);
+                    sigma0 = obj.removeEPS(lyap(F,G*G'),nRound);
                     % % calculate the discretized values
                     syms tau
                     % % use cayley hamilton theorem to calcualte e^Ft
                     eFt = obj.cayleyHamilton(F);
                     % % calculate Fbar using the above expression
-                    Fbar = obj.removeEPS(subs(eFt,tau,timeStep),10);
+                    Fbar = obj.removeEPS(subs(eFt,tau,timeStep),nRound);
                     % % evaluate Qbar, very computationally expensive
                     Qsym = eFt*(G*G')*eFt';
                     Qint = NaN(N);
@@ -193,7 +194,7 @@ classdef GPKF
                         Qint(ii) = integral(fun,0,timeStep);
                     end
                     % % remove numbers lower than eps
-                    Qbar = obj.removeEPS(Qint,10);
+                    Qbar = obj.removeEPS(Qint,nRound);
                     % % outputs
                     % initialize matrices as cell matrices
                     Amat = cell(xDomainNP);
