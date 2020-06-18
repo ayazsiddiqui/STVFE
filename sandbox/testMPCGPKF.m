@@ -45,7 +45,7 @@ Flows = timeseries(Flows,timeInSec);
 
 %% set up the KFGP classdef
 % construct an instance of the RGP class: squaredExponential or exponential
-gpkf = GPKF(1,'squaredExponential');
+gpkf = GPKF(1,'exponential');
 % set values of hyper parameters
 noiseVar = 0.01;
 hyperParams = [1 heightScale timeScale noiseVar]';
@@ -135,42 +135,6 @@ for ii = 1:noIter
     ck_k = ckp1_kp1;
 end
 
-%% tradtional GP estimation
-% % % preallocate matrices
-GPpredMean = NaN(size(xPredict,2),noIter);
-GPpostVar =  NaN(size(xPredict,2),noIter);
-GPstdDev =  NaN(size(xPredict,2),noIter);
-GPupperBound = NaN(size(xPredict,2),noIter);
-GPlowerBound = NaN(size(xPredict,2),noIter);
-GPcompTime = NaN(1,noIter);
-GPfit = NaN(1,noIter);
-
-for ii = 1:noIter
-    % % % all points visited and y at values upto step ii
-    xVisited = [pointsVisited(:,1:ii);tVec(1,1:ii)];
-    yVisited = fValAtPt(1:ii,:);
-    % % % time at which prediction is desired
-    tPredict = tVec(ii);
-    % % % traditional GP regression
-    tic
-    [GPpredMean(:,ii),GPpostVar(:,ii)] = gpkf.traditionalGpRegression...
-        (xVisited,yVisited,xPredict,tPredict,optHyperParams);
-    GPcompTime(ii) = toc;
-    % % % percentage fit
-    GPfit(ii) = 100*(1 - (norm(GPpredMean(:,ii)-windSpeedOut(:,ii))/...
-        max([norm(windSpeedOut(:,ii)),eps])));
-    % % % remove real or imaginary parts lower than eps
-    GPstdDev(:,ii) = sqrt(gpkf.removeEPS(GPpostVar(:,ii),5));
-    % % % upper bounds = mean + x*(standard deviation)
-    GPupperBound(:,ii) = GPpredMean(:,ii) + 1*GPstdDev(:,ii);
-    % % % lower bounds = mean + x*(standard deviation)
-    GPlowerBound(:,ii) = GPpredMean(:,ii) - 1*GPstdDev(:,ii);
-    % % % percentage completion
-    GPtxt = fprintf('Traditional GP Percentage completion = %0.2f%% \n',...
-        100*ii/noIter);
-end
-
-
 %% plot data
 % keyboard
 % % % linewidths
@@ -215,16 +179,10 @@ for ii = 1:noTimeSteps
         'color',1/255*[254,178,76]);
     plUpperBds = plot(upperBound(:,ii),xPredict,'--','linewidth',lwd,...
         'color',1/255*[254,178,76]);
-    % % plot GP mean and bounds
-    plGPPredMean = plot(GPpredMean(:,ii),xPredict,'-x','linewidth',lwd,...
-        'color',1/255*[55,126,184]);
-    plGPLowerBds = plot(GPlowerBound(:,ii),xPredict,'-.','linewidth',lwd,...
-        'color',1/255*[158,188,218]);
-    plGPUpperBds = plot(GPupperBound(:,ii),xPredict,'-.','linewidth',lwd,...
-        'color',1/255*[158,188,218]);
-    
-    legend([plTrueWind,plPredMean,plLowerBds,plGPPredMean,plGPLowerBds],...
-        'True func','GPKF $\mu$','GPKF bounds','GP $\mu$','GP bounds')
+    % % legend
+    legend([plTrueWind,plPredMean,plLowerBds],...
+        'True func','GPKF $\mu$','GPKF bounds');
+    % % title
     txt1 = sprintf('$l_{t} / \\tau$ = %0.2f,',timeScale/timeStep);
     txt = sprintf(' Time = %0.2f min',tVec(ii));
     txt = strcat(txt1,txt);
@@ -240,8 +198,6 @@ end
 figure(2)
 x = gcf;
 set(gcf,'position',x.Position.*[1 0 1 1])
-pGPC = plot(1:noIter,GPcompTime,'linewidth',lwd,'color',...
-    1/255*[55,126,184]);
 hold on
 grid on
 pGPKFC = plot(1:noIter,GPKFcompTime,'linewidth',lwd,...
@@ -249,13 +205,11 @@ pGPKFC = plot(1:noIter,GPKFcompTime,'linewidth',lwd,...
 ylim([-0.005 Inf])
 xlabel('Time step number')
 ylabel('Computational time (sec)')
-legend([pGPC,pGPKFC],{'GP','GPKF'},'location','best')
+legend(pGPKFC,{'GPKF'},'location','best')
 
 figure(3)
 x = gcf;
 set(gcf,'position',x.Position.*[1 0 1 1])
-pGPFit = plot(tVec,GPfit,'linewidth',lwd,'color',...
-    1/255*[55,126,184]);
 hold on
 grid on
 pGPKFFit = plot(tVec,GPKFfit,'linewidth',lwd,...
@@ -263,7 +217,7 @@ pGPKFFit = plot(tVec,GPKFfit,'linewidth',lwd,...
 xlabel('Time (min)')
 ylabel('Fit (\%)')
 ylim([0 100])
-legend([pGPFit,pGPKFFit],{'GP','GPKF'},'location','best')
+legend(pGPKFFit,{'GPKF'},'location','best')
 
 set(findobj('-property','FontSize'),'FontSize',12)
 
@@ -274,19 +228,19 @@ fName = [pwd,'\outputs\',strrep(datestr(datetime),':','_')];
 % delete([pwd,'\outputs\*.mat'])
 % delete([pwd,'\outputs\*.avi'])
 
-save(fName)
+% save(fName)
 
 %% video
 % % % % video setting
-video = VideoWriter(fName,'Motion JPEG AVI');
-% % video = VideoWriter('vid_Test1','MPEG-4');
-video.FrameRate = 10;
-set(gca,'nextplot','replacechildren');
-
-open(video)
-for ii = 1:length(F)
-    writeVideo(video, F(ii));
-end
-close(video)
+% video = VideoWriter(fName,'Motion JPEG AVI');
+% % % video = VideoWriter('vid_Test1','MPEG-4');
+% video.FrameRate = 10;
+% set(gca,'nextplot','replacechildren');
+% 
+% open(video)
+% for ii = 1:length(F)
+%     writeVideo(video, F(ii));
+% end
+% close(video)
 
 
