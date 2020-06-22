@@ -272,7 +272,7 @@ classdef GPKF
         % % % %         Kalman estimation as per jp Algorithm 1
         function [F_t,sigF_t,skp1_kp1,ckp1_kp1] = ...
                 gpkfKalmanEstimation(obj,xMeasure,sk_k,ck_k,Mk,yk,...
-                Ks_12,Amat,Qmat,Hmat,noiseVar,nPredict)
+                Ks_12,Amat,Qmat,Hmat,noiseVar)
             % % number of measurable points which is subset of xDomain
             xMeasureNP = size(xMeasure,2);
             % % number of points visited at each step which is a subset of xMeasure
@@ -290,40 +290,21 @@ classdef GPKF
             end
             % % C matrix as per Carron conf. paper Eqn. (12)
             Cmat = Ik*Ks_12*Hmat;
-            % % initialize matrices for MPC
-            skp1_k = NaN(size(sk_k,1),nPredict);
-            ckp1_k = NaN(size(ck_k,1),size(ck_k,2),nPredict);
-            skp1_kp1 = NaN(size(sk_k,1),nPredict);
-            ckp1_kp1 = NaN(size(ck_k,1),size(ck_k,2),nPredict);
-            F_t = NaN(size(sk_k,1),nPredict);
-            sigF_t = NaN(size(ck_k,1),size(ck_k,2),nPredict);
-            
-            for ii = 1:nPredict
-                if ii == 1
-                    % % Kalman filter equations as per Carron conf. paper Eqn. (6)
-                    skp1_k(:,ii) = Amat*sk_k; % Eqn. (6a)
-                    ckp1_k(:,:,ii) = Amat*ck_k*Amat' + Qmat; % Eqn. (6b)
-                    Lkp1 = ckp1_k(:,:,ii)*Cmat'/(Cmat*ckp1_k(:,:,ii)*Cmat' + Rmat); % Eqn (6e)
-                    skp1_kp1(:,ii) = skp1_k(:,ii) + Lkp1*(yk - Cmat*skp1_k(:,ii)); % Eqn (6c)
-                    ckp1_kp1(:,:,ii) = ckp1_k(:,:,ii) - Lkp1*Cmat*ckp1_k(:,:,ii); % Eqn (6d)
-                    % % process estimate and covariance as per Todescato algortihm 1
-                    F_t(:,ii) = Ks_12*Hmat*skp1_kp1(:,ii); % Eqn. (13)
-                    sigF_t(:,:,ii) = Ks_12*Hmat*ckp1_kp1(:,:,ii)*Hmat'*Ks_12;
-                else
-                    sk_k = skp1_kp1(:,ii-1);
-                    ck_k = ckp1_kp1(:,:,ii-1);
-                    % % Kalman filter equations as per Carron conf. paper Eqn. (6)
-                    skp1_k(:,ii) = Amat*sk_k; % Eqn. (6a)
-                    ckp1_k(:,:,ii) = Amat*ck_k*Amat' + Qmat; % Eqn. (6b)
-                    skp1_kp1(:,ii) = skp1_k(:,ii); % Eqn (6c)
-                    ckp1_kp1(:,:,ii) = ckp1_k(:,:,ii); % Eqn (6d)
-                    % % process estimate and covariance as per Todescato algortihm 1
-                    F_t(:,ii) = Ks_12*Hmat*skp1_kp1(:,ii); % Eqn. (13)
-                    sigF_t(:,:,ii) = Ks_12*Hmat*ckp1_kp1(:,:,ii)*Hmat'*Ks_12;
-                    
-                end
-                
+            % % Kalman filter equations as per Carron conf. paper Eqn. (6)
+            skp1_k = Amat*sk_k; % Eqn. (6a)
+            ckp1_k = Amat*ck_k*Amat' + Qmat; % Eqn. (6b)
+            % set kalman gain to zero if yk is empty
+            if isempty(yk)
+                Lkp1 = 0*skp1_k;
+                skp1_kp1 = skp1_k; % Eqn (6c)
+            else
+                Lkp1 = ckp1_k*Cmat'/(Cmat*ckp1_k*Cmat' + Rmat); % Eqn (6e)
+                skp1_kp1 = skp1_k + Lkp1*(yk - Cmat*skp1_k); % Eqn (6c)
             end
+            ckp1_kp1 = ckp1_k - Lkp1*Cmat*ckp1_k; % Eqn (6d)
+            % % process estimate and covariance as per Todescato algortihm 1
+            F_t = Ks_12*Hmat*skp1_kp1; % Eqn. (13)
+            sigF_t = Ks_12*Hmat*ckp1_kp1*Hmat'*Ks_12;
         end
         
         % % % %         Regression as per jp section 5

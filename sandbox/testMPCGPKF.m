@@ -89,6 +89,8 @@ sk_k = initCons.s0;
 % % % number of iterations
 noIter = noTimeSteps;
 % % % preallocate matrices
+F_t =  NaN(size(xPredict,2),predHorz);
+sigF_t = NaN(size(xPredict,2),size(xPredict,2),predHorz);
 predMean = NaN(size(xPredict,2),predHorz,noIter);
 postVar =  NaN(size(xPredict,2),predHorz,noIter);
 stdDev =  NaN(size(xPredict,2),predHorz,noIter);
@@ -110,29 +112,35 @@ for ii = 1:noIter
     Mk = xMeasure(:,visitIdx);
     % % % extract wind speed at visited values
     yk = windSpeedOut(visitIdx,ii);
-    % % % stepwise update of kalman state estimate and covariance
-    tic
-    [F_t,sigF_t,skp1_kp1,ckp1_kp1] = ...
-        gpkf.gpkfKalmanEstimation(xMeasure,sk_k,ck_k,Mk,yk,...
-        Ks_12,initCons.Amat,initCons.Qmat,initCons.Hmat,optHyperParams(end),...
-        predHorz);
     % % % regression over a finer domain
     for jj = 1:predHorz
+        % % % stepwise update of kalman state estimate and covariance
+        tic
+        if jj == 1
+            ykPassed = yk;
+        else
+            ykPassed = [];
+        end
+        [F_t(:,jj),sigF_t(:,:,jj),skp1_kp1,ckp1_kp1] = ...
+            gpkf.gpkfKalmanEstimation(xMeasure,sk_k,ck_k,Mk,ykPassed,...
+            Ks_12,initCons.Amat,initCons.Qmat,initCons.Hmat,...
+            optHyperParams(end));
         [predMean(:,jj,ii),postVar(:,jj,ii)] = gpkf.gpkfRegression(xDomain,xPredict,...
             F_t(:,jj),sigF_t(:,:,jj),Ks,optHyperParams);
         % % % remove real or imaginary parts lower than eps
         stdDev(:,jj,ii) = sqrt(gpkf.removeEPS(postVar(:,jj,ii),5));
         % % % upper bounds = mean + x*(standard deviation)
         upperBound(:,jj,ii) = predMean(:,jj,ii) + 1*stdDev(:,jj,ii);
-        % % %lower bounds = mean + x*(standard deviation)
+        % % % lower bounds = mean + x*(standard deviation)
         lowerBound(:,jj,ii) = predMean(:,jj,ii) - 1*stdDev(:,jj,ii);
+        % % % update previous step information
+        sk_k = skp1_kp1;
+        ck_k = ckp1_kp1;
     end
     % % % store points visited at the respective function value
     pointsVisited(:,ii) = Mk(:);
     fValAtPt(ii,:) = yk(:);
-    % % % update previous step information
-    sk_k = skp1_kp1(:,1);
-    ck_k = ckp1_kp1(:,:,1);
+
 end
 
 %% plot data
