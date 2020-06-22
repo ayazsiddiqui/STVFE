@@ -55,7 +55,7 @@ classdef GPKF
             covMat = covMat + triu(covMat,1)';
         end
         
-        % % % %         temporal kernel: exponential
+        % % % %         temporal kernel
         function val = temporalCovariance(obj,t1,t2,timeScale)
             % % covariance equation
             switch obj.temporalKernel
@@ -293,12 +293,11 @@ classdef GPKF
             % % Kalman filter equations as per Carron conf. paper Eqn. (6)
             skp1_k = Amat*sk_k; % Eqn. (6a)
             ckp1_k = Amat*ck_k*Amat' + Qmat; % Eqn. (6b)
+            Lkp1 = ckp1_k*Cmat'/(Cmat*ckp1_k*Cmat' + Rmat); % Eqn (6e)
             % set kalman gain to zero if yk is empty
             if isempty(yk)
-                Lkp1 = 0*skp1_k;
                 skp1_kp1 = skp1_k; % Eqn (6c)
             else
-                Lkp1 = ckp1_k*Cmat'/(Cmat*ckp1_k*Cmat' + Rmat); % Eqn (6e)
                 skp1_kp1 = skp1_k + Lkp1*(yk - Cmat*skp1_k); % Eqn (6c)
             end
             ckp1_kp1 = ckp1_k - Lkp1*Cmat*ckp1_k; % Eqn (6d)
@@ -342,6 +341,51 @@ classdef GPKF
                 postVar(ii,:) = Vx(ii,1) - sigmaX(ii,:)*(Vf\(Vf - sigF_t))*...
                     (Vf\sigmaX(ii,:)');
             end
+        end
+        
+        % % % %         future predictions using GPKF
+        function op = predictionGPKF(obj,xMeasure,sk_k,ck_k,Mk,yk,...
+                Ks_12,Amat,Qmat,Hmat,xPredict,Ks,hyperParam,predHorizon)
+            % % % preallocate matrices
+            F_t =  NaN(size(xMeasure,2),predHorizon);
+            sigF_t = NaN(size(xMeasure,2),size(xMeasure,2),predHorizon);
+            predMean = NaN(size(xPredict,2),predHorizon);
+            postVar =  NaN(size(xPredict,2),predHorizon);
+            stdDev =  NaN(size(xPredict,2),predHorizon);
+            upperBound = NaN(size(xPredict,2),predHorizon);
+            lowerBound = NaN(size(xPredict,2),predHorizon);
+            % % % obtain prediction mean and posterior variance over the
+            % % % prediction horizon
+            for jj = 1:predHorizon
+                if jj == 1
+                    ykPassed = yk;
+                else
+                    ykPassed = [];
+                end
+
+                % % % stepwise update of kalman state estimate and covariance
+                [F_t(:,jj),sigF_t(:,:,jj),skp1_kp1,ckp1_kp1] = ...
+                    obj.gpkfKalmanEstimation(xMeasure,sk_k,ck_k,Mk(jj),...
+                    ykPassed,Ks_12,Amat,Qmat,Hmat,...
+                    hyperParam(end));
+                % % % kalman regression to calculate mean and variance
+                [predMean(:,jj),postVar(:,jj)] = ...
+                    obj.gpkfRegression(xMeasure,xPredict,...
+                    F_t(:,jj),sigF_t(:,:,jj),Ks,hyperParam);
+                % % % remove real or imaginary parts lower than eps
+                stdDev(:,jj) = sqrt(obj.removeEPS(postVar(:,jj),5));
+                % % % upper bounds = mean + x*(standard deviation)
+                upperBound(:,jj) = predMean(:,jj) + 1*stdDev(:,jj);
+                % % % lower bounds = mean + x*(standard deviation)
+                lowerBound(:,jj) = predMean(:,jj) - 1*stdDev(:,jj);
+                % % % update previous step information
+                sk_k = skp1_kp1;
+                ck_k = ckp1_kp1;
+            end
+            
+            op.predMeanPrediction = predMean;
+            op.postVarPrediction = postVar;
+            
         end
         
         % % % %         traditional GP regression

@@ -71,9 +71,6 @@ Nn = 2;
 initCons = gpkf.GpkfInitialize(xDomain,...
     optHyperParams(end-1),timeStep,'approximationOrder',Nn);
 
-% initCons = GpkfInitialize(xDomain,...
-%     optHyperParams(end-1),timeStep,'approximationOrder',Nn);
-
 % % % set number of points visited per step
 nVisit = 1;
 % % % initialize parameters
@@ -89,13 +86,11 @@ sk_k = initCons.s0;
 % % % number of iterations
 noIter = noTimeSteps;
 % % % preallocate matrices
-F_t =  NaN(size(xPredict,2),predHorz);
-sigF_t = NaN(size(xPredict,2),size(xPredict,2),predHorz);
-predMean = NaN(size(xPredict,2),predHorz,noIter);
-postVar =  NaN(size(xPredict,2),predHorz,noIter);
-stdDev =  NaN(size(xPredict,2),predHorz,noIter);
-upperBound = NaN(size(xPredict,2),predHorz,noIter);
-lowerBound = NaN(size(xPredict,2),predHorz,noIter);
+predMean = NaN(size(xPredict,2),noIter);
+postVar =  NaN(size(xPredict,2),noIter);
+stdDev =  NaN(size(xPredict,2),noIter);
+upperBound = NaN(size(xPredict,2),noIter);
+lowerBound = NaN(size(xPredict,2),noIter);
 pointsVisited = NaN(nVisit,noIter);
 fValAtPt = NaN(noIter,nVisit);
 GPKFcompTime = NaN(1,noIter);
@@ -106,41 +101,43 @@ for ii = 1:noIter
     if ii == 1
         visitIdx = sort(randperm(size(xMeasure,2),nVisit));
     else
-        [~,visitIdx] = max(sum(postVar(:,:,ii-1),2));
+        [~,visitIdx] = max(sum(postVar(:,ii-1),2));
     end
     % % % extract visited values from xMeasure
     Mk = xMeasure(:,visitIdx);
     % % % extract wind speed at visited values
     yk = windSpeedOut(visitIdx,ii);
+    % % % future predictions
+    gpfkPredict = gpkf.predictionGPKF(xMeasure,sk_k,ck_k,...
+        Mk*ones(predHorz,1),yk,...
+        Ks_12,initCons.Amat,initCons.Qmat,initCons.Hmat,...
+        xPredict,Ks,optHyperParams,predHorz);
+    % % % kalman state estimation
+    [F_t,sigF_t,skp1_kp1,ckp1_kp1] = ...
+        gpkf.gpkfKalmanEstimation(xMeasure,sk_k,ck_k,Mk,yk,...
+        Ks_12,initCons.Amat,initCons.Qmat,initCons.Hmat,...
+        optHyperParams(end));
     % % % regression over a finer domain
-    for jj = 1:predHorz
-        % % % stepwise update of kalman state estimate and covariance
-        tic
-        if jj == 1
-            ykPassed = yk;
-        else
-            ykPassed = [];
-        end
-        [F_t(:,jj),sigF_t(:,:,jj),skp1_kp1,ckp1_kp1] = ...
-            gpkf.gpkfKalmanEstimation(xMeasure,sk_k,ck_k,Mk,ykPassed,...
-            Ks_12,initCons.Amat,initCons.Qmat,initCons.Hmat,...
-            optHyperParams(end));
-        [predMean(:,jj,ii),postVar(:,jj,ii)] = gpkf.gpkfRegression(xDomain,xPredict,...
-            F_t(:,jj),sigF_t(:,:,jj),Ks,optHyperParams);
-        % % % remove real or imaginary parts lower than eps
-        stdDev(:,jj,ii) = sqrt(gpkf.removeEPS(postVar(:,jj,ii),5));
-        % % % upper bounds = mean + x*(standard deviation)
-        upperBound(:,jj,ii) = predMean(:,jj,ii) + 1*stdDev(:,jj,ii);
-        % % % lower bounds = mean + x*(standard deviation)
-        lowerBound(:,jj,ii) = predMean(:,jj,ii) - 1*stdDev(:,jj,ii);
-        % % % update previous step information
-        sk_k = skp1_kp1;
-        ck_k = ckp1_kp1;
-    end
+    [predMean(:,ii),postVar(:,ii)] = gpkf.gpkfRegression(xDomain,xPredict,...
+        F_t,sigF_t,Ks,optHyperParams);
+    % % % remove real or imaginary parts lower than eps
+    stdDev(:,ii) = sqrt(gpkf.removeEPS(postVar(:,ii),5));
+    % % % upper bounds = mean + x*(standard deviation)
+    upperBound(:,ii) = predMean(:,ii) + 1*stdDev(:,ii);
+    % % % lower bounds = mean + x*(standard deviation)
+    lowerBound(:,ii) = predMean(:,ii) - 1*stdDev(:,ii);
+    % % % update previous step information
+    sk_k = skp1_kp1;
+    ck_k = ckp1_kp1;
+    
+    %     op = gpkf.predictionGPKF(xMeasure,sk_k,ck_k,Mk,yk,...
+    %                 Ks_12,initCons.Amat,initCons.Qmat,initCons.Hmat,...
+    %                 xPredict,Ks,optHyperParams,predHorz);
+    
     % % % store points visited at the respective function value
     pointsVisited(:,ii) = Mk(:);
     fValAtPt(ii,:) = yk(:);
-
+    
 end
 
 %% plot data
@@ -158,8 +155,8 @@ F = struct('cdata',uint8(zeros(840,1680,3)),'colormap',[]);
 
 for ii = 1:noTimeSteps-predHorz+1
     
-    for jj = 1:predHorz
-        subplot(2,2,jj)
+%     for jj = 1:predHorz
+%         subplot(2,2,jj)
         if ii == 1
             hold on
             grid on
@@ -176,31 +173,31 @@ for ii = 1:noTimeSteps-predHorz+1
             delete(h);
             
         end
-    end
+%     end
     
     % % plot true wind
-    for jj = 1:predHorz
-        subplot(2,2,jj)
-        plTrueWind = plot(windSpeedOut(:,ii+jj-1),heights,'k','linewidth',lwd);
+%     for jj = 1:predHorz
+%         subplot(2,2,jj)
+        plTrueWind = plot(windSpeedOut(:,ii),heights,'k','linewidth',lwd);
         % % plot measured wind value
         plfVals = plot(fValAtPt(ii,:),pointsVisited(:,ii),'mo',...
             'markerfacecolor','m','linewidth',lwd);
         % % plot GPKF mean and bounds
-        plPredMean = plot(predMean(:,jj,ii),xPredict,'-x','linewidth',lwd,...
+        plPredMean = plot(predMean(:,ii),xPredict,'-x','linewidth',lwd,...
             'color',1/255*[228,26,28]);
-        plLowerBds = plot(lowerBound(:,jj,ii),xPredict,'--','linewidth',lwd,...
+        plLowerBds = plot(lowerBound(:,ii),xPredict,'--','linewidth',lwd,...
             'color',1/255*[254,178,76]);
-        plUpperBds = plot(upperBound(:,jj,ii),xPredict,'--','linewidth',lwd,...
+        plUpperBds = plot(upperBound(:,ii),xPredict,'--','linewidth',lwd,...
             'color',1/255*[254,178,76]);
         % % legend
         legend([plTrueWind,plPredMean,plLowerBds],...
             'True func','GPKF $\mu$','GPKF bounds');
         % % title
         txt1 = sprintf('$l_{t} / \\tau$ = %0.2f,',timeScale/timeStep);
-        txt = sprintf(' Time = %0.2f min',tVec(ii+jj-1));
+        txt = sprintf(' Time = %0.2f min',tVec(ii));
         txt = strcat(txt1,txt);
         title(txt);
-    end
+%     end
     
     ff = getframe(gcf);
     F(ii).cdata = ff.cdata;
