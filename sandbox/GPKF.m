@@ -83,12 +83,13 @@ classdef GPKF
             % % parse inputs
             pp = inputParser;
             addParameter(pp,'explorationConstant',2,@(x) isnumeric(x));
+            addParameter(pp,'exploitationConstant',1,@(x) isnumeric(x));
             parse(pp,varargin{:});
             
             switch obj.acquisitionFunction
                 case 'upperConfidenceBound'
                     % calculate UCB
-                    val = predMean + ...
+                    val = pp.Results.exploitationConstant*predMean + ...
                         2^(pp.Results.explorationConstant).*postVar;
                 case 'expectedImprovement'
                     % calculate standard deviation
@@ -310,7 +311,7 @@ classdef GPKF
         end
         
         % % % %         Kalman estimation as per jp Algorithm 1
-        function [F_t,sigF_t,skp1_kp1,ckp1_kp1] = ...
+        function [F_t,sigF_t,skp1_kp1,ckp1_kp1,varargout] = ...
                 gpkfKalmanEstimation(obj,xMeasure,sk_k,ck_k,Mk,yk,...
                 Ks_12,Amat,Qmat,Hmat,noiseVar)
             % % number of measurable points which is subset of xDomain
@@ -344,6 +345,8 @@ classdef GPKF
             % % process estimate and covariance as per Todescato algortihm 1
             F_t = Ks_12*Hmat*skp1_kp1; % Eqn. (13)
             sigF_t = Ks_12*Hmat*ckp1_kp1*Hmat'*Ks_12;
+            % % varibale outputs
+            varargout{1} = Ik;
         end
         
         % % % %         Regression as per jp section 5
@@ -395,6 +398,8 @@ classdef GPKF
             stdDev =  NaN(size(xPredict,2),predHorizon);
             upperBound = NaN(size(xPredict,2),predHorizon);
             lowerBound = NaN(size(xPredict,2),predHorizon);
+            predMeanAtLoc = NaN(1,predHorizon);
+            postVarAtLoc = NaN(1,predHorizon);
             % % % obtain prediction mean and posterior variance over the
             % % % prediction horizon
             for jj = 1:predHorizon
@@ -403,9 +408,9 @@ classdef GPKF
                 else
                     ykPassed = [];
                 end
-
+                
                 % % % stepwise update of kalman state estimate and covariance
-                [F_t(:,jj),sigF_t(:,:,jj),skp1_kp1,ckp1_kp1] = ...
+                [F_t(:,jj),sigF_t(:,:,jj),skp1_kp1,ckp1_kp1,Ik] = ...
                     obj.gpkfKalmanEstimation(xMeasure,sk_k,ck_k,Mk(jj),...
                     ykPassed,Ks_12,Amat,Qmat,Hmat,...
                     hyperParam(end));
@@ -413,6 +418,9 @@ classdef GPKF
                 [predMean(:,jj),postVar(:,jj)] = ...
                     obj.gpkfRegression(xMeasure,xPredict,...
                     F_t(:,jj),sigF_t(:,:,jj),Ks,hyperParam);
+                % % % store mean and variance at current location for later
+                predMeanAtLoc(jj) = predMean(logical(Ik'),jj);
+                postVarAtLoc(jj) = postVar(logical(Ik'),jj);
                 % % % remove real or imaginary parts lower than eps
                 stdDev(:,jj) = sqrt(obj.removeEPS(postVar(:,jj),5));
                 % % % upper bounds = mean + x*(standard deviation)
@@ -426,6 +434,60 @@ classdef GPKF
             
             op.predMeanPrediction = predMean;
             op.postVarPrediction = postVar;
+            op.predMeanAtLoc = predMeanAtLoc;
+            op.postVarAtLoc = postVarAtLoc;
+        end
+        
+        % % % %         control using mpc
+        function val = gpkfMPC(obj,xMeasure,sk_k,ck_k,Mk,yk,Ks_12,Amat,Qmat,...
+                Hmat,xPredict,Ks,hyperParam,uAllowable,predHorizon,varargin)
+            
+            pp = inputParser;
+            addParameter(pp,'explorationConstant',2,@(x) isnumeric(x));
+            addParameter(pp,'exploitationConstant',1,@(x) isnumeric(x));
+            parse(pp,varargin{:});
+            
+            % % % determine all possible control
+            ctrlComb = makeBruteForceCombinations(uAllowable,predHorizon);
+            % % % number of state trajectories
+            nTraject = size(ctrlComb,1);
+            % % % determine state trajectories, gpkf predictions,
+            % % % and acquisition function values for all ctrlComb
+            stateTrjectories = NaN(nTraject,predHorizon+1);
+            stateTrjectories(:,1) = Mk;
+            aqFunVal = NaN(nTraject,predHorizon+1);
+            % % % start the looping
+            for ii = 1:nTraject
+                for jj = 2:predHorizon+1
+                    % use previous state for following steps
+                    stateTrjectories(ii,jj) = stateTrjectories(ii,jj-1)+...
+                        ctrlComb(ii,jj-1);
+                end
+                % ensure the trajectory remains with bounds
+                stateTrjectories(ii,stateTrjectories(ii,:)<xMeasure(1)) = ...
+                    xMeasure(1);
+                stateTrjectories(ii,stateTrjectories(ii,:)>xMeasure(end)) = ...
+                    xMeasure(end);
+                % obtain prediction mean and posterior variance over the
+                % prediction horizon for each state trajectory
+                gpkfPred = obj.predictionGPKF(xMeasure,sk_k,ck_k,...
+                    stateTrjectories(ii,:),yk,Ks_12,Amat,Qmat,...
+                    Hmat,xPredict,Ks,hyperParam,predHorizon+1);
+                % % % calculate acquisition function values
+                aqFunVal(ii,:) = obj.calcAcquisitionFun(gpkfPred.predMeanAtLoc(:),...
+                    gpkfPred.postVarAtLoc(:),yk,'explorationConstant',...
+                    pp.Results.explorationConstant,...
+                    'exploitationConstant',pp.Results.exploitationConstant)';
+            end
+            % % % sum the acquisition function values along the column
+            % direction
+            sumAqFun = sum(aqFunVal,2);
+            % find the max value and the corresponding state trajectory
+            [maxVal,bestTrajIdx] = max(sumAqFun);
+            % output these two
+            val.optStateTrajectory = stateTrjectories(bestTrajIdx,:);
+            val.optCtrlSeq = ctrlComb(bestTrajIdx,:);
+            val.objFunVal = maxVal;
             
         end
         
