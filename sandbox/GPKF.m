@@ -441,12 +441,11 @@ classdef GPKF
         % % % %         control using mpc
         function val = gpkfMPC(obj,xMeasure,sk_k,ck_k,Mk,yk,Ks_12,Amat,Qmat,...
                 Hmat,xPredict,Ks,hyperParam,uAllowable,predHorizon,varargin)
-            
+            % % % parse input
             pp = inputParser;
             addParameter(pp,'explorationConstant',2,@(x) isnumeric(x));
             addParameter(pp,'exploitationConstant',1,@(x) isnumeric(x));
             parse(pp,varargin{:});
-            
             % % % determine all possible control
             ctrlComb = makeBruteForceCombinations(uAllowable,predHorizon);
             % % % number of state trajectories
@@ -464,10 +463,20 @@ classdef GPKF
                         ctrlComb(ii,jj-1);
                 end
                 % ensure the trajectory remains with bounds
-                stateTrjectories(ii,stateTrjectories(ii,:)<xMeasure(1)) = ...
-                    xMeasure(1);
-                stateTrjectories(ii,stateTrjectories(ii,:)>xMeasure(end)) = ...
-                    xMeasure(end);
+                belowBounds = stateTrjectories(ii,:)<xMeasure(1);
+                stateTrjectories(ii,belowBounds) = xMeasure(1);
+                ctrlComb(ii,belowBounds(2:end)) = xMeasure(1) - ...
+                    stateTrjectories(ii,belowBounds(2:end));
+                
+                aboveBounds = stateTrjectories(ii,:)>xMeasure(end);
+                stateTrjectories(ii,aboveBounds) = xMeasure(end);
+                ctrlComb(ii,aboveBounds(2:end)) = xMeasure(end) - ...
+                    stateTrjectories(ii,aboveBounds(2:end));
+            end
+            % remove repeated state trajectories
+            [stateTrjectories,ia,~] = unique(stateTrjectories,'rows');
+            ctrlComb = ctrlComb(ia,:);
+            for ii = 1:size(stateTrjectories,1)
                 % obtain prediction mean and posterior variance over the
                 % prediction horizon for each state trajectory
                 gpkfPred = obj.predictionGPKF(xMeasure,sk_k,ck_k,...

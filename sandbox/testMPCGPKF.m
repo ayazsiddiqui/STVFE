@@ -7,7 +7,7 @@ close all
 cd(fileparts(mfilename('fullpath')));
 
 %% generate wind using colored noise
-rng(2);
+rng(56);
 % environment
 hMax = 1500;
 hMin = 100;
@@ -58,13 +58,13 @@ hyperError = optHyperParams./hyperParams;
 
 %% set up MPC
 % % % prediction horizon
-predHorz = 0;
+predHorz = 1;
 % % % time step for mpc trigger
 mpcInterval = timeScale/20;
 % % % allowable control inputs
-uAllowable = -600:100:600;
+uAllowable = -1000:100:1000;
 % % % exploration constant: used as (2^(c))*(posterior variance)
-exploreConstant = 1;
+exploreConstant = 0;
 % % % exploitation constant: used as c*(prediction mean)
 exploitConstant = 0;
 
@@ -84,8 +84,6 @@ initCons = gpkf.GpkfInitialize(xDomain,...
 initConsMPC = gpkf.GpkfInitialize(xDomain,...
     optHyperParams(end-1),mpcInterval,'approximationOrder',Nn);
 
-% % % set number of points visited per step
-nVisit = 1;
 % % % initialize parameters
 Ks = gpkf.buildSpatialCovMat(xMeasure,optHyperParams(1),optHyperParams(2));
 
@@ -105,8 +103,8 @@ acquiFun = NaN(size(xPredict,2),noIter);
 stdDev =  NaN(size(xPredict,2),noIter);
 upperBound = NaN(size(xPredict,2),noIter);
 lowerBound = NaN(size(xPredict,2),noIter);
-pointsVisited = NaN(nVisit,noIter);
-fValAtPt = NaN(noIter,nVisit);
+pointsVisited = NaN(1,noIter);
+fValAtPt = NaN(noIter,1);
 GPKFcompTime = NaN(1,noIter);
 GPKFfit = NaN(1,noIter);
 optCtrlSequence = NaN(ceil(tVec(end)/mpcInterval),predHorz);
@@ -115,17 +113,16 @@ mpcCount = 1;
 
 for ii = 1:noIter
     % % % visit said points
-    if ii == 1
-        visitIdx = sort(randperm(size(xMeasure,2),nVisit));
-        mpcRes.optStateTrajectory = xMeasure(:,visitIdx);
-        Mk = mpcRes.optStateTrajectory(1);
+    if ii == 1 || ~exist('mpcRes','var')
+        visitIdx = randperm(size(xMeasure,2),1);
+        Mk = xMeasure(:,visitIdx);
     else
-    [~,visitIdx] =  max(postVar(:,ii-1));
-%     Mk = xMeasure(:,visitIdx);
-    Mk = mpcRes.optStateTrajectory(1);
+        Mk = Mk + mpcRes.optCtrlSeq(1);
+        [~,maxIdx] =  max(postVar(:,ii-1));
+        Mk2 = xMeasure(:,maxIdx);
     end
     % % % extract wind speed at visited values
-    yk = windSpeedOut(visitIdx,ii);
+    yk = windSpeedOut((Mk == xMeasure)',ii);
     % % % kalman state estimation
     [F_t,sigF_t,skp1_kp1,ckp1_kp1] = ...
         gpkf.gpkfKalmanEstimation(xMeasure,sk_k,ck_k,Mk,yk,...
@@ -152,9 +149,9 @@ for ii = 1:noIter
             Ks,optHyperParams,uAllowable,predHorz,...
             'explorationConstant',exploreConstant,...
             'exploitationConstant',exploitConstant);
-    % % % store optimal control sequence
-    optCtrlSequence(mpcCount,:) = mpcRes.optCtrlSeq;
-    mpcCount = mpcCount + 1;
+        % % % store optimal control sequence
+        optCtrlSequence(mpcCount,:) = mpcRes.optCtrlSeq;
+        mpcCount = mpcCount + 1;
     end
     
     
@@ -230,7 +227,6 @@ for ii = 1:noTimeSteps
     txt = strcat(txt1,txt);
     title(txt);
     %     end
-    
     ff = getframe(gcf);
     F(ii).cdata = ff.cdata;
     
