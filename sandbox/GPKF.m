@@ -7,22 +7,34 @@ classdef GPKF
     properties
         noSpatialIps
         temporalKernel
+        acquisitionFunction
     end
     
     %% methods
     methods
         
         % % % %         constructor
-        function obj = GPKF(noSpatialIps,temporalKernel)
+        function obj = GPKF(noSpatialIps,temporalKernel,acquisitionFunction)
             obj.noSpatialIps = noSpatialIps;
-            if strcmp(temporalKernel,'exponential') || ...
-                    strcmp(temporalKernel,'squaredExponential')
+            % % % check validity of temporalKernel
+            temporalKernelChoice = {'exponential','squaredExponential'};
+            if ismember(temporalKernel,temporalKernelChoice)
                 obj.temporalKernel = temporalKernel;
             else
-                error(['Only ''exponential'' and ',...
-                    '''squaredExponential'' are valid entries. '...
-                    'You enterd %s. \n'],temporalKernel)
+                error(['Only ',repmat('%s, ',1,numel(temporalKernelChoice)-1),...
+                    'and %s are valid entries for temporalKernel.',...
+                    ' You entered %s.'],temporalKernelChoice{:},temporalKernel);
             end
+            % % % check validity of acquisition function
+            aquiFunChoice = {'upperConfidenceBound','expectedImprovement'};
+            if ismember(acquisitionFunction,aquiFunChoice)
+                obj.acquisitionFunction = acquisitionFunction;
+            else
+                error(['Only ',repmat('%s, ',1,numel(aquiFunChoice)-1),...
+                    'and %s are valid entries for temporalKernel.',...
+                    ' You entered %s.'],aquiFunChoice{:},acquisitionFunction);
+            end
+            
         end
         
         % % % %         mean function
@@ -66,7 +78,35 @@ classdef GPKF
             end
         end
         
-        % % % %         calculate covaraince as a product of the two covariances
+        % % % %         acquisition function
+        function val = calcAcquisitionFun(obj,predMean,postVar,fBest,varargin)
+            % % parse inputs
+            pp = inputParser;
+            addParameter(pp,'explorationConstant',2,@(x) isnumeric(x));
+            parse(pp,varargin{:});
+            
+            switch obj.acquisitionFunction
+                case 'upperConfidenceBound'
+                    % calculate UCB
+                    val = predMean + ...
+                        2^(pp.Results.explorationConstant).*postVar;
+                case 'expectedImprovement'
+                    % calculate standard deviation
+                    stdDev = postVar.^0.5;
+                    % make standard normal distribution
+                    stdNormDis = gmdistribution(0,1);
+                    % calculate z
+                    Z(stdDev>0,1) = (predMean(:) - fBest)./stdDev(:);
+                    Z(stdDev<=0,1) = 0;
+                    % calculate expected improvement
+                    val = (predMean - fBest).*cdf(stdNormDis,Z) + ...
+                        stdDev.*pdf(stdNormDis,Z);
+                    val(stdDev<=0) = 0;
+            end
+            
+        end
+        
+        % % % %         calculate covariance as a product of the two covariances
         function val = calcTotCovariance(obj,x1,x2,hyperParams)
             % % covariance amplitude or variance of latent function
             covAmp = hyperParams(1);
@@ -341,6 +381,7 @@ classdef GPKF
                 postVar(ii,:) = Vx(ii,1) - sigmaX(ii,:)*(Vf\(Vf - sigF_t))*...
                     (Vf\sigmaX(ii,:)');
             end
+            postVar = obj.removeEPS(postVar,6);
         end
         
         % % % %         future predictions using GPKF

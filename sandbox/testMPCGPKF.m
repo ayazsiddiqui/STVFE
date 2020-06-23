@@ -27,7 +27,7 @@ stdDev = 1;
 timeScale = 10;
 heightScale = 200;
 % generate data
-windSpeedOut = genWindv2(heights,heightScale,tVec,timeScale,stdDev);
+windSpeedOut = 1*(0+genWindv2(heights,heightScale,tVec,timeScale,stdDev));
 heights2 = repmat(heights,1,noTimeSteps);
 tVec2 = repmat(tVec(:)',noTP,1);
 dsgnPts = [heights2(:)'; tVec2(:)'];
@@ -45,7 +45,8 @@ Flows = timeseries(Flows,timeInSec);
 
 %% set up the KFGP classdef
 % construct an instance of the RGP class: squaredExponential or exponential
-gpkf = GPKF(1,'exponential');
+% acquisition function options: expectedImprovement or upperConfidenceBound
+gpkf = GPKF(1,'exponential','expectedImprovement');
 % set values of hyper parameters
 noiseVar = 0.01;
 hyperParams = [1 heightScale timeScale noiseVar]';
@@ -88,6 +89,7 @@ noIter = noTimeSteps;
 % % % preallocate matrices
 predMean = NaN(size(xPredict,2),noIter);
 postVar =  NaN(size(xPredict,2),noIter);
+acquiFun = NaN(size(xPredict,2),noIter);
 stdDev =  NaN(size(xPredict,2),noIter);
 upperBound = NaN(size(xPredict,2),noIter);
 lowerBound = NaN(size(xPredict,2),noIter);
@@ -101,7 +103,7 @@ for ii = 1:noIter
     if ii == 1
         visitIdx = sort(randperm(size(xMeasure,2),nVisit));
     else
-        [~,visitIdx] = max(sum(postVar(:,ii-1),2));
+        [~,visitIdx] = max(acquiFun(:,ii-1));
     end
     % % % extract visited values from xMeasure
     Mk = xMeasure(:,visitIdx);
@@ -121,11 +123,15 @@ for ii = 1:noIter
     [predMean(:,ii),postVar(:,ii)] = gpkf.gpkfRegression(xDomain,xPredict,...
         F_t,sigF_t,Ks,optHyperParams);
     % % % remove real or imaginary parts lower than eps
-    stdDev(:,ii) = sqrt(gpkf.removeEPS(postVar(:,ii),5));
+    stdDev(:,ii) = postVar(:,ii).^0.5;
     % % % upper bounds = mean + x*(standard deviation)
     upperBound(:,ii) = predMean(:,ii) + 1*stdDev(:,ii);
     % % % lower bounds = mean + x*(standard deviation)
     lowerBound(:,ii) = predMean(:,ii) - 1*stdDev(:,ii);
+    % % % calculate acquisition function value
+    acquiFun(:,ii) = gpkf.calcAcquisitionFun(predMean(:,ii),postVar(:,ii),...
+        max(predMean(:,ii)),'explorationConstant',5);
+    
     % % % update previous step information
     sk_k = skp1_kp1;
     ck_k = ckp1_kp1;
@@ -163,7 +169,7 @@ for ii = 1:noTimeSteps-predHorz+1
             xlabel('Wind speed (m/s)');
             ylabel('Altitude (m)');
             %         xlim([lB-mod(lB,plotRes),uB-mod(uB,plotRes)+plotRes])
-            xlim([-4 4])
+            xlim(0+[-4 4])
             ylim([hMin hMax]);
         else
             delete(findall(gcf,'type','annotation'));
@@ -242,16 +248,16 @@ fName = [pwd,'\outputs\',strrep(datestr(datetime),':','_')];
 % save(fName)
 
 %% video
-% % % % video setting
-% video = VideoWriter(fName,'Motion JPEG AVI');
-% % % video = VideoWriter('vid_Test1','MPEG-4');
-% video.FrameRate = 10;
-% set(gca,'nextplot','replacechildren');
-%
-% open(video)
-% for ii = 1:length(F)
-%     writeVideo(video, F(ii));
-% end
-% close(video)
+% % % video setting
+video = VideoWriter(fName,'Motion JPEG AVI');
+% % video = VideoWriter('vid_Test1','MPEG-4');
+video.FrameRate = 10;
+set(gca,'nextplot','replacechildren');
+
+open(video)
+for ii = 1:length(F)
+    writeVideo(video, F(ii));
+end
+close(video)
 
 
