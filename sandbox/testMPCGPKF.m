@@ -16,7 +16,7 @@ heights = heights(:);
 meanFlow = 10;
 noTP = numel(heights);
 % time in minutes
-timeStep = 0.05*10;
+timeStep = 0.05*2;
 tVec = 0:timeStep:1*60;
 noTimeSteps = numel(tVec);
 % time in seconds
@@ -60,7 +60,7 @@ hyperError = optHyperParams./hyperParams;
 % % % prediction horizon
 predHorz = 1;
 % % % time step for mpc trigger
-mpcInterval = timeScale/20;
+mpcInterval = timeScale/5;
 % % % allowable control inputs
 uAllowable = -1000:100:1000;
 % % % exploration constant: used as (2^(c))*(posterior variance)
@@ -117,12 +117,23 @@ for ii = 1:noIter
         visitIdx = randperm(size(xMeasure,2),1);
         Mk = xMeasure(:,visitIdx);
     else
-        Mk = Mk + mpcRes.optCtrlSeq(1);
         [~,maxIdx] =  max(postVar(:,ii-1));
         Mk2 = xMeasure(:,maxIdx);
+        Mk = mpcRes.optStateTrajectory(2);
     end
     % % % extract wind speed at visited values
     yk = windSpeedOut((Mk == xMeasure)',ii);
+    % % % gpkf MPC
+    if mod(tVec(ii),mpcInterval) == 0
+        mpcRes = gpkf.gpkfMPC(xMeasure,sk_k,ck_k,Mk,yk,Ks_12,...
+            initConsMPC.Amat,initConsMPC.Qmat,initConsMPC.Hmat,xPredict,...
+            Ks,optHyperParams,uAllowable,predHorz,...
+            'explorationConstant',exploreConstant,...
+            'exploitationConstant',exploitConstant);
+        % % % store optimal control sequence)
+        optCtrlSequence(mpcCount,:) = mpcRes.optCtrlSeq;
+        mpcCount = mpcCount + 1;
+    end
     % % % kalman state estimation
     [F_t,sigF_t,skp1_kp1,ckp1_kp1] = ...
         gpkf.gpkfKalmanEstimation(xMeasure,sk_k,ck_k,Mk,yk,...
@@ -142,17 +153,7 @@ for ii = 1:noIter
         max(predMean(:,ii)),...
         'explorationConstant',exploreConstant,...
         'exploitationConstant',exploitConstant);
-    % % % gpkf MPC
-    if mod(tVec(ii),mpcInterval) == 0
-        mpcRes = gpkf.gpkfMPC(xMeasure,sk_k,ck_k,Mk,yk,Ks_12,...
-            initConsMPC.Amat,initConsMPC.Qmat,initConsMPC.Hmat,xPredict,...
-            Ks,optHyperParams,uAllowable,predHorz,...
-            'explorationConstant',exploreConstant,...
-            'exploitationConstant',exploitConstant);
-        % % % store optimal control sequence
-        optCtrlSequence(mpcCount,:) = mpcRes.optCtrlSeq;
-        mpcCount = mpcCount + 1;
-    end
+    
     
     
     % % % update previous step information
