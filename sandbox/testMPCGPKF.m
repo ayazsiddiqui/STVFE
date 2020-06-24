@@ -13,10 +13,10 @@ hMax = 1500;
 hMin = 100;
 heights = hMin:100:hMax;
 heights = heights(:);
-meanFlow = 10;
+meanFlow = 0;
 noTP = numel(heights);
 % time in minutes
-timeStep = 0.05*2;
+timeStep = 0.05*5;
 tVec = 0:timeStep:1*60;
 noTimeSteps = numel(tVec);
 % time in seconds
@@ -27,7 +27,7 @@ stdDev = 1;
 timeScale = 10;
 heightScale = 200;
 % generate data
-windSpeedOut = 1*(0+genWindv2(heights,heightScale,tVec,timeScale,stdDev));
+windSpeedOut = meanFlow + genWindv2(heights,heightScale,tVec,timeScale,stdDev);
 heights2 = repmat(heights,1,noTimeSteps);
 tVec2 = repmat(tVec(:)',noTP,1);
 dsgnPts = [heights2(:)'; tVec2(:)'];
@@ -58,13 +58,14 @@ hyperError = optHyperParams./hyperParams;
 
 %% set up MPC
 % % % prediction horizon
-predHorz = 1;
+predHorz = 4;
 % % % time step for mpc trigger
-mpcInterval = timeScale/5;
+mpcInterval = timeScale/4;
 % % % allowable control inputs
-uAllowable = -1000:100:1000;
+uStep = 200;
+uAllowable = uStep*(-4:2:4);
 % % % exploration constant: used as (2^(c))*(posterior variance)
-exploreConstant = 0;
+exploreConstant = 4;
 % % % exploitation constant: used as c*(prediction mean)
 exploitConstant = 0;
 
@@ -193,7 +194,7 @@ for ii = 1:noTimeSteps
         xlabel('Wind speed (m/s)');
         ylabel('Altitude (m)');
         %         xlim([lB-mod(lB,plotRes),uB-mod(uB,plotRes)+plotRes])
-        xlim(0+[-4 4])
+        xlim(meanFlow+[-4 4])
         ylim([hMin hMax]);
     else
         delete(findall(gcf,'type','annotation'));

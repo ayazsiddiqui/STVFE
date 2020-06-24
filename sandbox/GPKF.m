@@ -93,11 +93,13 @@ classdef GPKF
                         2^(pp.Results.explorationConstant).*postVar;
                 case 'expectedImprovement'
                     % calculate standard deviation
-                    stdDev = postVar.^0.5;
+                    stdDev = postVar(:).^0.5;
+                    predMean = predMean(:);
                     % make standard normal distribution
                     stdNormDis = gmdistribution(0,1);
                     % calculate z
-                    Z(stdDev>0,1) = (predMean(:) - fBest)./stdDev(:);
+                    Z(stdDev>0,1) = (predMean(stdDev>0) - fBest)...
+                        ./stdDev(stdDev>0);
                     Z(stdDev<=0,1) = 0;
                     % calculate expected improvement
                     val = (predMean - fBest).*cdf(stdNormDis,Z) + ...
