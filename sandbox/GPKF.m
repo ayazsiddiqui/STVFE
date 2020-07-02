@@ -324,12 +324,21 @@ classdef GPKF
             Rmat = eye(MkNP)*noiseVar;
             % % indicator matrix to find which points are visited at each iteration
             Ik = zeros(MkNP,xMeasureNP);
-            % % find points from xMeasure visited at iteration k
-            lia = ismember(xMeasure',Mk','rows');
-            lia = find(lia); % covert to numerical array instead of logical
             % % populate the Ik matrix
             for ii = 1:MkNP
-                Ik(ii,lia(ii)) = 1;
+                distFromXm = Mk(ii) - xMeasure;
+                [minDis,minIdx] = min(abs(distFromXm));
+                if distFromXm(minIdx) > 0
+                    Ik(ii,minIdx+1) = minDis/...
+                        (xMeasure(minIdx+1)-xMeasure(minIdx));
+                    Ik(ii,minIdx) = 1 - Ik(ii,minIdx+1);
+                elseif distFromXm(minIdx) < 0
+                    Ik(ii,minIdx-1) = minDis/...
+                        (xMeasure(minIdx)-xMeasure(minIdx-1));  
+                    Ik(ii,minIdx) = 1 - Ik(ii,minIdx-1);
+                else
+                    Ik(ii,minIdx) = 1;
+                end
             end
             % % C matrix as per Carron conf. paper Eqn. (12)
             Cmat = Ik*Ks_12*Hmat;

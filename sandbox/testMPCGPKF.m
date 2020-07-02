@@ -116,7 +116,7 @@ for ii = 1:noIter
     % % % visit said points
     if ii == 1 || ~exist('mpcRes','var')
         visitIdx = randperm(size(xMeasure,2),1);
-        Mk = xMeasure(:,visitIdx);
+        Mk = xMeasure(:,visitIdx)-0*10;
     else
         [~,maxIdx] =  max(postVar(:,ii-1));
         Mk2 = xMeasure(:,maxIdx);
