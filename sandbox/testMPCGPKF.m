@@ -58,9 +58,9 @@ hyperError = optHyperParams./hyperParams;
 
 %% set up MPC
 % % % prediction horizon
-predHorz = 4;
+predHorz = 6;
 % % % time step for mpc trigger
-mpcInterval = timeScale/4;
+mpcInterval = timeScale/10;
 % % % allowable control inputs
 uStep = 200;
 uAllowable = uStep*(-4:2:4);
@@ -108,31 +108,42 @@ pointsVisited = NaN(1,noIter);
 fValAtPt = NaN(noIter,1);
 GPKFcompTime = NaN(1,noIter);
 GPKFfit = NaN(1,noIter);
-optCtrlSequence = NaN(ceil(tVec(end)/mpcInterval),predHorz);
+optStateTraj = NaN(ceil(tVec(end)/mpcInterval),predHorz);
 % start off mpc counter
 mpcCount = 1;
 
 for ii = 1:noIter
     % % % visit said points
-    if ii == 1 || ~exist('mpcRes','var')
+    if ii == 1
         visitIdx = randperm(size(xMeasure,2),1);
         Mk = xMeasure(:,visitIdx)-0*10;
     else
         [~,maxIdx] =  max(postVar(:,ii-1));
         Mk2 = xMeasure(:,maxIdx);
-        Mk = mpcRes.optStateTrajectory(2);
+        Mk = mpcResBF.optStateTrajectory(2);
     end
     % % % extract wind speed at visited values
     yk = windSpeedOut((Mk == xMeasure)',ii);
     % % % gpkf MPC
     if mod(tVec(ii),mpcInterval) == 0
-        mpcRes = gpkf.gpkfMPC(xMeasure,sk_k,ck_k,Mk,yk,Ks_12,...
+        mpcResBF = gpkf.gpkfMPC_bruteForce(xMeasure,sk_k,ck_k,Mk,yk,Ks_12,...
             initConsMPC.Amat,initConsMPC.Qmat,initConsMPC.Hmat,xPredict,...
             Ks,optHyperParams,uAllowable,predHorz,...
             'explorationConstant',exploreConstant,...
             'exploitationConstant',exploitConstant);
+        
+%         mpcRes2 = gpkf.gpkfMPC_fmincon(xMeasure,sk_k,ck_k,Mk,yk,Ks_12,...
+%             initConsMPC.Amat,initConsMPC.Qmat,initConsMPC.Hmat,...
+%             xPredict,Ks,optHyperParams,predHorz,...
+%             'explorationConstant',exploreConstant,...
+%             'exploitationConstant',exploitConstant);
+        
         % % % store optimal control sequence)
-        optCtrlSequence(mpcCount,:) = mpcRes.optCtrlSeq;
+        optStateBF(mpcCount,:) = mpcResBF.optStateTrajectory(2:end);
+        optFvalBF(mpcCount) = mpcResBF.objFunVal;
+%         optStateTraj(mpcCount,:) = mpcRes2.optStateTrajectory(2:end);
+%         optFvalFM(mpcCount) = mpcRes2.objFunVal;
+        
         mpcCount = mpcCount + 1;
     end
     % % % kalman state estimation
@@ -236,31 +247,31 @@ end
 
 %% other plots
 % % % % computational time plot
-figure(2)
-x = gcf;
-set(gcf,'position',x.Position.*[1 0 1 1])
-hold on
-grid on
-pGPKFC = plot(1:noIter,GPKFcompTime,'linewidth',lwd,...
-    'color',1/255*[228,26,28]);
-ylim([-0.005 Inf])
-xlabel('Time step number')
-ylabel('Computational time (sec)')
-legend(pGPKFC,{'GPKF'},'location','best')
-
-figure(3)
-x = gcf;
-set(gcf,'position',x.Position.*[1 0 1 1])
-hold on
-grid on
-pGPKFFit = plot(tVec,GPKFfit,'linewidth',lwd,...
-    'color',1/255*[228,26,28]);
-xlabel('Time (min)')
-ylabel('Fit (\%)')
-ylim([0 100])
-legend(pGPKFFit,{'GPKF'},'location','best')
-
-set(findobj('-property','FontSize'),'FontSize',12)
+% figure(2)
+% x = gcf;
+% set(gcf,'position',x.Position.*[1 0 1 1])
+% hold on
+% grid on
+% pGPKFC = plot(1:noIter,GPKFcompTime,'linewidth',lwd,...
+%     'color',1/255*[228,26,28]);
+% ylim([-0.005 Inf])
+% xlabel('Time step number')
+% ylabel('Computational time (sec)')
+% legend(pGPKFC,{'GPKF'},'location','best')
+% 
+% figure(3)
+% x = gcf;
+% set(gcf,'position',x.Position.*[1 0 1 1])
+% hold on
+% grid on
+% pGPKFFit = plot(tVec,GPKFfit,'linewidth',lwd,...
+%     'color',1/255*[228,26,28]);
+% xlabel('Time (min)')
+% ylabel('Fit (\%)')
+% ylim([0 100])
+% legend(pGPKFFit,{'GPKF'},'location','best')
+% 
+% set(findobj('-property','FontSize'),'FontSize',12)
 
 %% save data to output folder
 [status, msg, msgID] = mkdir(pwd,'outputs');
@@ -269,13 +280,14 @@ fName = [pwd,'\outputs\',strrep(datestr(datetime),':','_')];
 % delete([pwd,'\outputs\*.mat'])
 % delete([pwd,'\outputs\*.avi'])
 
-% save(fName)
+close(figure(1))
+save(fName)
 
 %% video
 % % % video setting
 video = VideoWriter(fName,'Motion JPEG AVI');
 % % video = VideoWriter('vid_Test1','MPEG-4');
-video.FrameRate = 10;
+video.FrameRate = 5;
 set(gca,'nextplot','replacechildren');
 
 open(video)

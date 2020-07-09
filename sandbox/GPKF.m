@@ -105,8 +105,7 @@ classdef GPKF
                     val = (predMean - fBest).*cdf(stdNormDis,Z) + ...
                         stdDev.*pdf(stdNormDis,Z);
                     val(stdDev<=0) = 0;
-            end
-            
+            end            
         end
         
         % % % %         calculate covariance as a product of the two covariances
@@ -328,13 +327,13 @@ classdef GPKF
             for ii = 1:MkNP
                 distFromXm = Mk(ii) - xMeasure;
                 [minDis,minIdx] = min(abs(distFromXm));
-                if distFromXm(minIdx) > 0
+                if round(distFromXm(minIdx),3) > 0
                     Ik(ii,minIdx+1) = minDis/...
                         (xMeasure(minIdx+1)-xMeasure(minIdx));
                     Ik(ii,minIdx) = 1 - Ik(ii,minIdx+1);
-                elseif distFromXm(minIdx) < 0
+                elseif round(distFromXm(minIdx),3) < 0
                     Ik(ii,minIdx-1) = minDis/...
-                        (xMeasure(minIdx)-xMeasure(minIdx-1));  
+                        (xMeasure(minIdx)-xMeasure(minIdx-1));
                     Ik(ii,minIdx) = 1 - Ik(ii,minIdx-1);
                 else
                     Ik(ii,minIdx) = 1;
@@ -419,7 +418,6 @@ classdef GPKF
                 else
                     ykPassed = [];
                 end
-                
                 % % % stepwise update of kalman state estimate and covariance
                 [F_t(:,jj),sigF_t(:,:,jj),skp1_kp1,ckp1_kp1,Ik] = ...
                     obj.gpkfKalmanEstimation(xMeasure,sk_k,ck_k,Mk(jj),...
@@ -430,8 +428,9 @@ classdef GPKF
                     obj.gpkfRegression(xMeasure,xPredict,...
                     F_t(:,jj),sigF_t(:,:,jj),Ks,hyperParam);
                 % % % store mean and variance at current location for later
-                predMeanAtLoc(jj) = predMean(logical(Ik'),jj);
-                postVarAtLoc(jj) = postVar(logical(Ik'),jj);
+                [predMeanAtLoc(jj),postVarAtLoc(jj)]...
+                    = obj.gpkfRegression(xMeasure,Mk(jj),...
+                    F_t(:,jj),sigF_t(:,:,jj),Ks,hyperParam);
                 % % % remove real or imaginary parts lower than eps
                 stdDev(:,jj) = sqrt(obj.removeEPS(postVar(:,jj),5));
                 % % % upper bounds = mean + x*(standard deviation)
@@ -450,7 +449,7 @@ classdef GPKF
         end
         
         % % % %         control using mpc
-        function val = gpkfMPC(obj,xMeasure,sk_k,ck_k,Mk,yk,Ks_12,Amat,Qmat,...
+        function val = gpkfMPC_bruteForce(obj,xMeasure,sk_k,ck_k,Mk,yk,Ks_12,Amat,Qmat,...
                 Hmat,xPredict,Ks,hyperParam,uAllowable,predHorizon,varargin)
             % % % parse input
             pp = inputParser;
@@ -510,6 +509,56 @@ classdef GPKF
             val.objFunVal = maxVal;
             
         end
+        
+        function val = gpkfMPC_fmincon(obj,xMeasure,sk_k,ck_k,Mk,yk,Ks_12,Amat,Qmat,...
+                Hmat,xPredict,Ks,hyperParam,predHorizon,varargin)
+            % % % parse input
+            pp = inputParser;
+            addParameter(pp,'explorationConstant',2,@(x) isnumeric(x));
+            addParameter(pp,'exploitationConstant',1,@(x) isnumeric(x));
+            parse(pp,varargin{:});
+            % % % set fmincon parameters
+            lb = [Mk ones(1,predHorizon).*xMeasure(1)];
+            ub = [Mk ones(1,predHorizon).*xMeasure(end)];
+            iniGuess = ones(1,predHorizon+1).*Mk;
+            options = optimoptions('fmincon');
+            % % % find optimum trajectory using fmincon
+            [optTraj,FVAL] =  fmincon( @(stateTrajectory) ...
+                obj.objfForFmincon(xMeasure,sk_k,ck_k,...
+                stateTrajectory,yk,Ks_12,Amat,Qmat,...
+                Hmat,xPredict,Ks,hyperParam,predHorizon+1,...
+                'explorationConstant',pp.Results.explorationConstant,...
+                'exploitationConstant',pp.Results.exploitationConstant),...
+                iniGuess,[],[],[],[],lb,ub,[],options);
+            % output
+            val.optStateTrajectory = optTraj;
+            val.objFunVal = FVAL;
+            
+        end
+        
+        % % % %         objective function for fmincon
+        function val = objfForFmincon(obj,xMeasure,sk_k,ck_k,MkTraj,...
+                yk,Ks_12,Amat,Qmat,...
+                Hmat,xPredict,Ks,hyperParam,predHorizon,varargin)
+            
+            % % % parse input
+            pp = inputParser;
+            addParameter(pp,'explorationConstant',2,@(x) isnumeric(x));
+            addParameter(pp,'exploitationConstant',1,@(x) isnumeric(x));
+            parse(pp,varargin{:});
+            
+            gpkfPred = obj.predictionGPKF(xMeasure,sk_k,ck_k,...
+                MkTraj,yk,Ks_12,Amat,Qmat,...
+                Hmat,xPredict,Ks,hyperParam,predHorizon);
+            % % % calculate acquisition function values
+            aqFunVal = obj.calcAcquisitionFun(gpkfPred.predMeanAtLoc(:),...
+                gpkfPred.postVarAtLoc(:),yk,'explorationConstant',...
+                pp.Results.explorationConstant,...
+                'exploitationConstant',pp.Results.exploitationConstant);
+            val = sum(aqFunVal);
+            
+        end
+        
         
         % % % %         traditional GP regression
         function [predMean,postVar] = traditionalGpRegression(obj,xVisited,yVisited,...
