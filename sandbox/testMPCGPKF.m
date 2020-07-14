@@ -120,7 +120,7 @@ for ii = 1:noIter
     else
         [~,maxIdx] =  max(postVar(:,ii-1));
         Mk2 = xMeasure(:,maxIdx);
-        Mk = mpcResBF.optStateTrajectory(2);
+        Mk = mpcRes2.optStateTrajectory(2);
     end
     % % % extract wind speed at visited values
     yk = windSpeedOut((Mk == xMeasure)',ii);
@@ -132,17 +132,17 @@ for ii = 1:noIter
             'explorationConstant',exploreConstant,...
             'exploitationConstant',exploitConstant);
         
-%         mpcRes2 = gpkf.gpkfMPC_fmincon(xMeasure,sk_k,ck_k,Mk,yk,Ks_12,...
-%             initConsMPC.Amat,initConsMPC.Qmat,initConsMPC.Hmat,...
-%             xPredict,Ks,optHyperParams,predHorz,...
-%             'explorationConstant',exploreConstant,...
-%             'exploitationConstant',exploitConstant);
+        mpcRes2 = gpkf.gpkfMPC_fmincon(xMeasure,sk_k,ck_k,Mk,yk,Ks_12,...
+            initConsMPC.Amat,initConsMPC.Qmat,initConsMPC.Hmat,...
+            xPredict,Ks,optHyperParams,predHorz,...
+            'explorationConstant',exploreConstant,...
+            'exploitationConstant',exploitConstant);
         
         % % % store optimal control sequence)
         optStateBF(mpcCount,:) = mpcResBF.optStateTrajectory(2:end);
         optFvalBF(mpcCount) = mpcResBF.objFunVal;
-%         optStateTraj(mpcCount,:) = mpcRes2.optStateTrajectory(2:end);
-%         optFvalFM(mpcCount) = mpcRes2.objFunVal;
+        optStateTraj(mpcCount,:) = mpcRes2.optStateTrajectory(2:end);
+        optFvalFM(mpcCount) = mpcRes2.objFunVal;
         
         mpcCount = mpcCount + 1;
     end

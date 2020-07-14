@@ -4,7 +4,7 @@ classdef GPKF
     %   gpkf = GPKF(n) where n is the number of spatial inputs
     
     %% properties
-    properties
+    properties (SetAccess = private)
         noSpatialIps
         temporalKernel
         acquisitionFunction
@@ -521,7 +521,7 @@ classdef GPKF
             lb = [Mk ones(1,predHorizon).*xMeasure(1)];
             ub = [Mk ones(1,predHorizon).*xMeasure(end)];
             iniGuess = ones(1,predHorizon+1).*Mk;
-            options = optimoptions('fmincon');
+            options = optimoptions('fmincon','algorithm','sqp');
             % % % find optimum trajectory using fmincon
             [optTraj,FVAL] =  fmincon( @(stateTrajectory) ...
                 obj.objfForFmincon(xMeasure,sk_k,ck_k,...
