@@ -4,10 +4,32 @@ classdef GPKF
     %   gpkf = GPKF(n) where n is the number of spatial inputs
     
     %% properties
-    properties (SetAccess = private)
-        noSpatialIps
-        temporalKernel
-        acquisitionFunction
+    properties (SetAccess = private,Hidden)
+        % constructore parameters
+        p_noSpatialIps
+        p_temporalKernel
+        p_acquisitionFunction
+    end
+    
+    properties
+        % hyper-parameters
+        p_spatialCovarianceAmp
+        p_spatialLenghtScale
+        p_temporalLenghtScale
+        p_noiseVariance
+        % gpkf parameters
+        p_xMeasure
+        p_gpfkTimeStep
+        p_squaredExpApproxOrder = 2
+        % acquisitioin function parameters
+        p_explorationConstant
+        p_exploitationConstant
+    end
+    
+    properties (Dependent, SetAccess = private)
+        p_spatialCovMat
+        p_spatialCovRoot
+        p_gpfkInitVals
     end
     
     %% methods
@@ -15,11 +37,11 @@ classdef GPKF
         
         % % % %         constructor
         function obj = GPKF(noSpatialIps,temporalKernel,acquisitionFunction)
-            obj.noSpatialIps = noSpatialIps;
+            obj.p_noSpatialIps = noSpatialIps;
             % % % check validity of temporalKernel
             temporalKernelChoice = {'exponential','squaredExponential'};
             if ismember(temporalKernel,temporalKernelChoice)
-                obj.temporalKernel = temporalKernel;
+                obj.p_temporalKernel = temporalKernel;
             else
                 error(['Only ',repmat('%s, ',1,numel(temporalKernelChoice)-1),...
                     'and %s are valid entries for temporalKernel.',...
@@ -28,7 +50,7 @@ classdef GPKF
             % % % check validity of acquisition function
             aquiFunChoice = {'upperConfidenceBound','expectedImprovement'};
             if ismember(acquisitionFunction,aquiFunChoice)
-                obj.acquisitionFunction = acquisitionFunction;
+                obj.p_acquisitionFunction = acquisitionFunction;
             else
                 error(['Only ',repmat('%s, ',1,numel(aquiFunChoice)-1),...
                     'and %s are valid entries for temporalKernel.',...
@@ -37,21 +59,37 @@ classdef GPKF
             
         end
         
+        % % % %         spatial covariance matrix
+        function val = get.p_spatialCovMat(obj)
+            val = obj.m_buildSpatialCovMat(obj.p_xMeasure);
+        end
+        
+        % % % %         root of spatial covariance
+        function val = get.p_spatialCovRoot(obj)
+            val = sqrtm(obj.p_spatialCovMat);
+        end
+        
+        % % % %         gpkf initialization values
+        function val = get.p_gpfkInitVals(obj)
+            val = obj.m_gpkfInitialize();
+        end
+        
         % % % %         mean function
-        function val = meanFunction(obj,x)
+        function val = m_meanFunction(obj,x)
             % % zero mean function
-            val = 0*(x'*x)*obj.noSpatialIps;
+            val = 0*(x'*x)*obj.p_noSpatialIps;
         end
         
         % % % %         spatial kernel: squared exponential
-        function val = spatialCovariance(obj,s1,s2,covAmp,lengthScales)
+        function val = m_CalcSpatialCovariance(obj,s1,s2)
             % % covariance equations
-            val = covAmp*exp(-0.5*(s1-s2)'*(eye(obj.noSpatialIps)...
-                ./lengthScales.^2)*(s1-s2));
+            val = obj.p_spatialCovarianceAmp*...
+                exp(-0.5*(s1-s2)'*(eye(obj.p_noSpatialIps)...
+                ./obj.p_spatialLenghtScale.^2)*(s1-s2));
         end
         
-        % % % %         form covariance matrix and mean vector
-        function covMat = buildSpatialCovMat(obj,x,covAmp,lengthScales)
+        % % % %         form covariance matrix
+        function covMat = m_buildSpatialCovMat(obj,x)
             % number of points = number of columns
             noPts = size(x,2);
             % preallocate matricx
@@ -59,8 +97,8 @@ classdef GPKF
             % form lower triangular covariance matrix for covMat
             for ii = 1:noPts
                 for jj = ii:noPts
-                    covMat(ii,jj) = obj.spatialCovariance(x(:,ii),x(:,jj),...
-                        covAmp,lengthScales);
+                    covMat(ii,jj) = obj.m_CalcSpatialCovariance(x(:,ii),...
+                        x(:,jj));
                 end
             end
             % form the total covariance matrix
@@ -68,29 +106,24 @@ classdef GPKF
         end
         
         % % % %         temporal kernel
-        function val = temporalCovariance(obj,t1,t2,timeScale)
+        function val = m_temporalCovariance(obj,t1,t2)
             % % covariance equation
-            switch obj.temporalKernel
+            switch obj.p_temporalKernel
                 case 'exponential'
-                    val = 1*exp(-abs(t2-t1)/timeScale);
+                    val = 1*exp(-abs(t2-t1)/obj.p_temporalLenghtScale);
                 case 'squaredExponential'
-                    val = 1*exp(-0.5*((t2-t1)^2)/timeScale^2);
+                    val = 1*exp(-0.5*((t2-t1)^2)/obj.p_temporalLenghtScale^2);
             end
         end
         
         % % % %         acquisition function
-        function val = calcAcquisitionFun(obj,predMean,postVar,fBest,varargin)
-            % % parse inputs
-            pp = inputParser;
-            addParameter(pp,'explorationConstant',2,@(x) isnumeric(x));
-            addParameter(pp,'exploitationConstant',1,@(x) isnumeric(x));
-            parse(pp,varargin{:});
+        function val = m_calcAcquisitionFun(obj,predMean,postVar,fBest)
             
-            switch obj.acquisitionFunction
+            switch obj.p_acquisitionFunction
                 case 'upperConfidenceBound'
                     % calculate UCB
-                    val = pp.Results.exploitationConstant*predMean + ...
-                        2^(pp.Results.explorationConstant).*postVar;
+                    val = obj.p_exploitationConstant*predMean + ...
+                        2^(obj.p_explorationConstant).*postVar;
                 case 'expectedImprovement'
                     % calculate standard deviation
                     stdDev = postVar(:).^0.5;
@@ -105,24 +138,17 @@ classdef GPKF
                     val = (predMean - fBest).*cdf(stdNormDis,Z) + ...
                         stdDev.*pdf(stdNormDis,Z);
                     val(stdDev<=0) = 0;
-            end            
+            end
         end
         
         % % % %         calculate covariance as a product of the two covariances
-        function val = calcTotCovariance(obj,x1,x2,hyperParams)
-            % % covariance amplitude or variance of latent function
-            covAmp = hyperParams(1);
-            % % length scales for spatial covariance
-            lenScale = hyperParams(2:obj.noSpatialIps+1);
-            % % time scale
-            timeScale = hyperParams(obj.noSpatialIps+2);
-            % % k = k_s*k_t
-            val = obj.spatialCovariance(x1(1:end-1),x2(1:end-1),covAmp,lenScale)...
-                *obj.temporalCovariance(x1(end),x2(end),timeScale);
+        function val = m_calcTotCovariance(obj,x1,x2)
+            val = obj.m_CalcSpatialCovariance(x1(1:end-1),x2(1:end-1))...
+                *obj.m_temporalCovariance(x1(end),x2(end));
         end
         
         % % % %         form covariance matrix and mean vector
-        function [covMat,meanVec] = buildCovMatAndMeanVec(obj,x,hyperParams)
+        function [covMat,meanVec] = m_buildCovMatAndMeanVec(obj,x)
             % number of points = number of columns
             noPts = size(x,2);
             % initial matrices
@@ -132,23 +158,22 @@ classdef GPKF
             % calculate mean
             for ii = 1:noPts
                 for jj = ii:noPts
-                    covMat(ii,jj) = obj.calcTotCovariance(x(:,ii),x(:,jj),...
-                        hyperParams);
+                    covMat(ii,jj) = obj.m_calcTotCovariance(x(:,ii),x(:,jj));
                 end
-                meanVec(ii,1) = obj.meanFunction(x(:,ii));
+                meanVec(ii,1) = obj.m_meanFunction(x(:,ii));
             end
             % form the total covariance matrix
             covMat = covMat + triu(covMat,1)';
         end
         
         % % % %         calculate marginal likelihood
-        function logP = calcMarginalLikelihood(obj,x,y,hyperParams)
+        function logP = m_calcMarginalLikelihood(obj,x,y)
             % determine number of training points
             noTP = size(x,2);
             % build the covariance matrix
-            kX = obj.buildCovMatAndMeanVec(x,hyperParams);
+            kX = obj.m_buildCovMatAndMeanVec(x);
             % add signal noise to the covariance matrix
-            kX = kX + eye(noTP)*hyperParams(obj.noSpatialIps + 3);
+            kX = kX + eye(noTP)*obj.p_noiseVariance;
             % the data fit part
             dataFit = 0.5*y'*(kX\y);
             % complexity penalty
@@ -160,26 +185,22 @@ classdef GPKF
         end
         
         % % % %         GPKF initialization
-        function val = GpkfInitialize(obj,xDomain,timeScale,...
-                timeStep,varargin)
+        function val = m_gpkfInitialize(obj)
             % % parse inputs
-            pp = inputParser;
-            addParameter(pp,'approximationOrder',6,...
-                @(x)assert(isnumeric(x) && ~mod(x,2),...
-                'Value must be even.'));
-            parse(pp,varargin{:});
-            N = pp.Results.approximationOrder;
-            
+            N = obj.p_squaredExpApproxOrder;
+            % % time step
+            timeStep = obj.p_gpfkTimeStep;
             % % total number of points in the entire domain of interest
-            xDomainNP = size(xDomain,2);
-            
-            switch obj.temporalKernel
+            xDomainNP = size(obj.p_xMeasure,2);
+            % % switch cases
+            switch obj.p_temporalKernel
                 case 'exponential'
                     % % calculate F,H,Q as per Carron Eqn. (14)
-                    F = exp(-timeStep/timeScale);
-                    H = sqrt(2/timeScale);
+                    F = exp(-timeStep/obj.p_temporalLenghtScale);
+                    H = sqrt(2/obj.p_temporalLenghtScale);
                     G = 1;
-                    Q = (1 - exp(-2*timeStep/timeScale))/(2/timeScale);
+                    Q = (1 - exp(-2*timeStep/obj.p_temporalLenghtScale))...
+                        /(2/obj.p_temporalLenghtScale);
                     % % solve the Lyapunov equation for X
                     sigma0 = lyap(F,G*G');
                     % % outputs
@@ -196,7 +217,7 @@ classdef GPKF
                     % % Hartinkainen paper Eqn. (11)
                     for n = 0:N
                         px = px + ((x^(2*n))*factorial(N)*((-1)^n)*...
-                            (2/(timeScale^2))^(N-n))...
+                            (2/(obj.p_temporalLenghtScale^2))^(N-n))...
                             /factorial(n);
                     end
                     % % find the roots of the above polynomial
@@ -218,8 +239,8 @@ classdef GPKF
                     F = [zeros(N-1,1) eye(N-1); -coEffs(1:end-1)];
                     G = [zeros(N-1,1);1];
                     % % calculate the numerator
-                    b0 = sqrt(factorial(N)*((2/(timeScale^2))^N)...
-                        *sqrt(pi*2*timeScale^2));
+                    b0 = sqrt(factorial(N)*((2/(obj.p_temporalLenghtScale^2))^N)...
+                        *sqrt(pi*2*obj.p_temporalLenghtScale^2));
                     H = [b0 zeros(1,N-1)];
                     sigma0 = obj.removeEPS(lyap(F,G*G'),nRound);
                     % % calculate the discretized values
@@ -313,14 +334,19 @@ classdef GPKF
         
         % % % %         Kalman estimation as per jp Algorithm 1
         function [F_t,sigF_t,skp1_kp1,ckp1_kp1,varargout] = ...
-                gpkfKalmanEstimation(obj,xMeasure,sk_k,ck_k,Mk,yk,...
-                Ks_12,Amat,Qmat,Hmat,noiseVar)
+                m_gpkfKalmanEstimation(obj,sk_k,ck_k,Mk,yk)
+            % % dummy variables
+            xMeasure = obj.p_xMeasure;
+            Ks_12 = obj.p_spatialCovRoot;
+            Amat = obj.p_gpfkInitVals.Amat;
+            Qmat = obj.p_gpfkInitVals.Qmat;
+            Hmat = obj.p_gpfkInitVals.Hmat;
             % % number of measurable points which is subset of xDomain
             xMeasureNP = size(xMeasure,2);
             % % number of points visited at each step which is a subset of xMeasure
             MkNP = size(Mk,2);
             % % R matrix as per Carron conf. paper Eqn. (12)
-            Rmat = eye(MkNP)*noiseVar;
+            Rmat = eye(MkNP)*obj.p_noiseVariance;
             % % indicator matrix to find which points are visited at each iteration
             Ik = zeros(MkNP,xMeasureNP);
             % % populate the Ik matrix
@@ -360,21 +386,17 @@ classdef GPKF
         end
         
         % % % %         Regression as per jp section 5
-        function [predMean,postVar] = gpkfRegression(obj,xDomain,xPredict,...
-                F_t,sigF_t,Ks,hyperParam)
+        function [predMean,postVar] = m_gpkfRegression(obj,xPredict,...
+                F_t,sigF_t)
             % % number of points in the discretized domain
-            xDomainNP = size(xDomain,2);
+            xDomainNP = size(obj.p_xMeasure,2);
             % % number of points over which we want to acquire predictions
             xPredictNp = size(xPredict,2);
-            % % extract values from hyper parameters
-            covAmp = hyperParam(1);
-            lengthScales = hyperParam(2:end-2);
-            timeScale = hyperParam(end-1);
             % % Regression as per section 5 of Todescato journal paper
             % % temporations kernel value at tau = 0
-            h0 = obj.temporalCovariance(0,0,timeScale);
+            h0 = obj.m_temporalCovariance(0,0);
             % % multiply the spatial covariance matrix by h0
-            Vf = h0*Ks;
+            Vf = h0*obj.p_spatialCovMat;
             % % preallocate matrices
             sigmaX = NaN(xPredictNp,xDomainNP);
             Vx = NaN(xPredictNp,1);
@@ -383,11 +405,11 @@ classdef GPKF
             % % perform regression on each point in the domain
             for ii = 1:xPredictNp
                 for jj = 1:xDomainNP
-                    sigmaX(ii,jj) = h0*obj.spatialCovariance(xPredict(:,ii),xDomain(:,jj)...
-                        ,covAmp,lengthScales);
+                    sigmaX(ii,jj) = h0*obj.m_CalcSpatialCovariance(...
+                        xPredict(:,ii),obj.p_xMeasure(:,jj));
                 end
-                Vx(ii,1) = h0*obj.spatialCovariance(xPredict(:,ii),xPredict(:,ii)...
-                    ,covAmp,lengthScales);
+                Vx(ii,1) = h0*obj.m_CalcSpatialCovariance(...
+                    xPredict(:,ii),xPredict(:,ii));
                 % % predicted mean as per Todescato Eqn. (17)
                 predMean(ii,1) = sigmaX(ii,:)*(Vf\F_t);
                 % % posterior variance as per Todescato Eqn. (18)
@@ -398,64 +420,47 @@ classdef GPKF
         end
         
         % % % %         future predictions using GPKF
-        function op = predictionGPKF(obj,xMeasure,sk_k,ck_k,Mk,yk,...
-                Ks_12,Amat,Qmat,Hmat,xPredict,Ks,hyperParam,predHorizon)
+        function op = m_predictionGPKF(obj,sk_k,ck_k,Mk,yk,traject,...
+                predHorizon)
+            
+            % % % dummy variables
+            xMeasure = obj.p_xMeasure;
+            matLengths = predHorizon + 1;
             % % % preallocate matrices
-            F_t =  NaN(size(xMeasure,2),predHorizon);
-            sigF_t = NaN(size(xMeasure,2),size(xMeasure,2),predHorizon);
-            predMean = NaN(size(xPredict,2),predHorizon);
-            postVar =  NaN(size(xPredict,2),predHorizon);
-            stdDev =  NaN(size(xPredict,2),predHorizon);
-            upperBound = NaN(size(xPredict,2),predHorizon);
-            lowerBound = NaN(size(xPredict,2),predHorizon);
-            predMeanAtLoc = NaN(1,predHorizon);
-            postVarAtLoc = NaN(1,predHorizon);
+            F_t =  NaN(size(xMeasure,2),matLengths);
+            sigF_t = NaN(size(xMeasure,2),size(xMeasure,2),matLengths);
+            predMeanAtLoc = NaN(1,matLengths);
+            postVarAtLoc = NaN(1,matLengths);
             % % % obtain prediction mean and posterior variance over the
             % % % prediction horizon
-            for jj = 1:predHorizon
+            for jj = 1:matLengths
                 if jj == 1
                     ykPassed = yk;
+                    xLocation = Mk;
                 else
                     ykPassed = [];
+                    xLocation = traject(jj-1);
                 end
                 % % % stepwise update of kalman state estimate and covariance
-                [F_t(:,jj),sigF_t(:,:,jj),skp1_kp1,ckp1_kp1,Ik] = ...
-                    obj.gpkfKalmanEstimation(xMeasure,sk_k,ck_k,Mk(jj),...
-                    ykPassed,Ks_12,Amat,Qmat,Hmat,...
-                    hyperParam(end));
-                % % % kalman regression to calculate mean and variance
-                [predMean(:,jj),postVar(:,jj)] = ...
-                    obj.gpkfRegression(xMeasure,xPredict,...
-                    F_t(:,jj),sigF_t(:,:,jj),Ks,hyperParam);
+                [F_t(:,jj),sigF_t(:,:,jj),skp1_kp1,ckp1_kp1] = ...
+                    obj.m_gpkfKalmanEstimation(sk_k,ck_k,xLocation,ykPassed);
                 % % % store mean and variance at current location for later
                 [predMeanAtLoc(jj),postVarAtLoc(jj)]...
-                    = obj.gpkfRegression(xMeasure,Mk(jj),...
-                    F_t(:,jj),sigF_t(:,:,jj),Ks,hyperParam);
-                % % % remove real or imaginary parts lower than eps
-                stdDev(:,jj) = sqrt(obj.removeEPS(postVar(:,jj),5));
-                % % % upper bounds = mean + x*(standard deviation)
-                upperBound(:,jj) = predMean(:,jj) + 1*stdDev(:,jj);
-                % % % lower bounds = mean + x*(standard deviation)
-                lowerBound(:,jj) = predMean(:,jj) - 1*stdDev(:,jj);
+                    = obj.m_gpkfRegression(xLocation,F_t(:,jj),sigF_t(:,:,jj));
                 % % % update previous step information
                 sk_k = skp1_kp1;
                 ck_k = ckp1_kp1;
             end
             
-            op.predMeanPrediction = predMean;
-            op.postVarPrediction = postVar;
             op.predMeanAtLoc = predMeanAtLoc;
             op.postVarAtLoc = postVarAtLoc;
         end
         
         % % % %         control using mpc
-        function val = gpkfMPC_bruteForce(obj,xMeasure,sk_k,ck_k,Mk,yk,Ks_12,Amat,Qmat,...
-                Hmat,xPredict,Ks,hyperParam,uAllowable,predHorizon,varargin)
-            % % % parse input
-            pp = inputParser;
-            addParameter(pp,'explorationConstant',2,@(x) isnumeric(x));
-            addParameter(pp,'exploitationConstant',1,@(x) isnumeric(x));
-            parse(pp,varargin{:});
+        function val = m_gpkfMPC_bruteForce(obj,sk_k,ck_k,Mk,yk,...
+                uAllowable,predHorizon)
+            % % % dummy variables
+            xMeasure = obj.p_xMeasure;
             % % % determine all possible control
             ctrlComb = makeBruteForceCombinations(uAllowable,predHorizon);
             % % % number of state trajectories
@@ -489,14 +494,13 @@ classdef GPKF
             for ii = 1:size(stateTrjectories,1)
                 % obtain prediction mean and posterior variance over the
                 % prediction horizon for each state trajectory
-                gpkfPred = obj.predictionGPKF(xMeasure,sk_k,ck_k,...
-                    stateTrjectories(ii,:),yk,Ks_12,Amat,Qmat,...
-                    Hmat,xPredict,Ks,hyperParam,predHorizon+1);
+                gpkfPred = obj.m_predictionGPKF(sk_k,ck_k,...
+                    Mk,yk,stateTrjectories(ii,2:end),...
+                    predHorizon);
                 % % % calculate acquisition function values
-                aqFunVal(ii,:) = obj.calcAcquisitionFun(gpkfPred.predMeanAtLoc(:),...
-                    gpkfPred.postVarAtLoc(:),yk,'explorationConstant',...
-                    pp.Results.explorationConstant,...
-                    'exploitationConstant',pp.Results.exploitationConstant)';
+                aqFunVal(ii,:) = obj.m_calcAcquisitionFun(...
+                    gpkfPred.predMeanAtLoc(:),...
+                    gpkfPred.postVarAtLoc(:),yk)';
             end
             % % % sum the acquisition function values along the column
             % direction
@@ -504,57 +508,54 @@ classdef GPKF
             % find the max value and the corresponding state trajectory
             [maxVal,bestTrajIdx] = max(sumAqFun);
             % output these two
-            val.optStateTrajectory = stateTrjectories(bestTrajIdx,:);
+            val.optStateTrajectory = stateTrjectories(bestTrajIdx,2:end);
             val.optCtrlSeq = ctrlComb(bestTrajIdx,:);
             val.objFunVal = maxVal;
             
         end
         
-        function val = gpkfMPC_fmincon(obj,xMeasure,sk_k,ck_k,Mk,yk,Ks_12,Amat,Qmat,...
-                Hmat,xPredict,Ks,hyperParam,predHorizon,varargin)
-            % % % parse input
-            pp = inputParser;
-            addParameter(pp,'explorationConstant',2,@(x) isnumeric(x));
-            addParameter(pp,'exploitationConstant',1,@(x) isnumeric(x));
-            parse(pp,varargin{:});
+        function val = m_gpkfMPC_fmincon(obj,sk_k,ck_k,Mk,yk,...
+                uLimits,predHorizon)
             % % % set fmincon parameters
-            lb = [Mk ones(1,predHorizon).*xMeasure(1)];
-            ub = [Mk ones(1,predHorizon).*xMeasure(end)];
-            iniGuess = ones(1,predHorizon+1).*Mk;
+            % % % bounds
+            lb = Mk + (1:predHorizon).*min(uLimits);
+            ub = Mk + (1:predHorizon).*max(uLimits);
+            
+            lb(lb<=obj.p_xMeasure(1)) = obj.p_xMeasure(1);
+            ub(ub>=obj.p_xMeasure(end)) = obj.p_xMeasure(end);
+            
+            % random trajectory between bounds
+            iniGuess = lb + (ub-lb).*rand(1,predHorizon);
+            
             options = optimoptions('fmincon','algorithm','sqp');
             % % % find optimum trajectory using fmincon
             [optTraj,FVAL] =  fmincon( @(stateTrajectory) ...
-                obj.objfForFmincon(xMeasure,sk_k,ck_k,...
-                stateTrajectory,yk,Ks_12,Amat,Qmat,...
-                Hmat,xPredict,Ks,hyperParam,predHorizon+1,...
-                'explorationConstant',pp.Results.explorationConstant,...
-                'exploitationConstant',pp.Results.exploitationConstant),...
+                -obj.m_objfForFmincon(sk_k,ck_k,...
+                Mk,yk,stateTrajectory,predHorizon),...
                 iniGuess,[],[],[],[],lb,ub,[],options);
+            
+            [optTrajPSO,FVALPSO] =  particleswarm( @(stateTrajectory) ...
+                -obj.m_objfForFmincon(sk_k,ck_k,...
+                Mk,yk,stateTrajectory,predHorizon),...
+                predHorizon,lb,ub);
+            
             % output
-            val.optStateTrajectory = optTraj;
-            val.objFunVal = FVAL;
+            val.optStateTrajectoryFmin = optTraj;
+            val.objFunValFmin = -FVAL;
+            val.optStateTrajectoryPso = optTrajPSO;
+            val.objFunValPso = -FVALPSO;
             
         end
         
         % % % %         objective function for fmincon
-        function val = objfForFmincon(obj,xMeasure,sk_k,ck_k,MkTraj,...
-                yk,Ks_12,Amat,Qmat,...
-                Hmat,xPredict,Ks,hyperParam,predHorizon,varargin)
+        function val = m_objfForFmincon(obj,sk_k,ck_k,Mk,...
+                yk,traject,predHorizon)
             
-            % % % parse input
-            pp = inputParser;
-            addParameter(pp,'explorationConstant',2,@(x) isnumeric(x));
-            addParameter(pp,'exploitationConstant',1,@(x) isnumeric(x));
-            parse(pp,varargin{:});
-            
-            gpkfPred = obj.predictionGPKF(xMeasure,sk_k,ck_k,...
-                MkTraj,yk,Ks_12,Amat,Qmat,...
-                Hmat,xPredict,Ks,hyperParam,predHorizon);
+            gpkfPred = obj.m_predictionGPKF(sk_k,ck_k,...
+                Mk,yk,traject,predHorizon);
             % % % calculate acquisition function values
-            aqFunVal = obj.calcAcquisitionFun(gpkfPred.predMeanAtLoc(:),...
-                gpkfPred.postVarAtLoc(:),yk,'explorationConstant',...
-                pp.Results.explorationConstant,...
-                'exploitationConstant',pp.Results.exploitationConstant);
+            aqFunVal = obj.m_calcAcquisitionFun(gpkfPred.predMeanAtLoc(:),...
+                gpkfPred.postVarAtLoc(:),yk);
             val = sum(aqFunVal);
             
         end
@@ -562,15 +563,15 @@ classdef GPKF
         
         % % % %         traditional GP regression
         function [predMean,postVar] = traditionalGpRegression(obj,xVisited,yVisited,...
-                xPredict,tPredict,hyperParams)
+                xPredict,tPredict)
             % % number of points over which we want to acquire predictions
             xPredictNp = size(xPredict,2);
             % % total number of points visited
             xVisitedNp = size(xVisited,2);
             % % form the covariance matrix and mean vector
-            [covMat,~] = obj.buildCovMatAndMeanVec(xVisited,hyperParams);
+            [covMat,~] = obj.buildCovMatAndMeanVec(xVisited);
             % % add noise to the covariance
-            covMat = covMat + eye(size(covMat))*hyperParams(end);
+            covMat = covMat + eye(size(covMat))*obj.p_noiseVariance;
             % % preallocate matrices
             predMean = NaN(xPredictNp,1);
             postVar = NaN(xPredictNp,1);
@@ -580,12 +581,12 @@ classdef GPKF
             % % calculate prediction mean and covariance
             for ii = 1:xPredictNp
                 for jj = 1:xVisitedNp
-                    Kxstar_x(ii,jj) = obj.calcTotCovariance(xPredictNew(:,ii)...
-                        ,xVisited(:,jj),hyperParams);
+                    Kxstar_x(ii,jj) = obj.m_calcTotCovariance(xPredictNew(:,ii)...
+                        ,xVisited(:,jj));
                 end
                 predMean(ii,1) = Kxstar_x(ii,:)*(covMat\yVisited);
-                postVar(ii,1) = obj.calcTotCovariance(xPredictNew(:,ii),...
-                    xPredictNew(:,ii),hyperParams) - Kxstar_x(ii,:)*...
+                postVar(ii,1) = obj.m_calcTotCovariance(xPredictNew(:,ii),...
+                    xPredictNew(:,ii)) - Kxstar_x(ii,:)*...
                     (covMat\Kxstar_x(ii,:)');
             end
             
