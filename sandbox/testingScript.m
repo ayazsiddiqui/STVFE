@@ -18,6 +18,10 @@ FastGPKF.p_xMeasure = 100:100:500;
 FastGPKF.p_exploitationConstant = 0;
 FastGPKF.p_explorationConstant = 2;
 
+% set initial values
+FastGPKF = FastGPKF.m_CalcSpatialCovMat;
+FastGPKF = FastGPKF.m_CalcSpatialCovRoot;
+FastGPKF = FastGPKF.gpfkInitialize;
 
 %% test methods
 % dummy values
@@ -69,9 +73,9 @@ uAllowable = -100:100:100;
 testBruteForce = FastGPKF.m_gpkfMPC_bruteForce(sk_k,ck_k,Mk,y1(1),...
     uAllowable,4);
 
-% test
+% test m_gpkfMPC_fmincon
 testFmincon = FastGPKF.m_gpkfMPC_fmincon(sk_k,ck_k,Mk,y1(1),...
-    uAllowable,4);
+    uAllowable,4,5);
 
 
 

@@ -26,7 +26,7 @@ classdef GPKF
         p_exploitationConstant
     end
     
-    properties (Dependent, SetAccess = private)
+    properties (SetAccess = private)
         p_spatialCovMat
         p_spatialCovRoot
         p_gpfkInitVals
@@ -60,18 +60,18 @@ classdef GPKF
         end
         
         % % % %         spatial covariance matrix
-        function val = get.p_spatialCovMat(obj)
-            val = obj.m_buildSpatialCovMat(obj.p_xMeasure);
+        function obj = m_CalcSpatialCovMat(obj)
+            obj.p_spatialCovMat= obj.m_buildSpatialCovMat(obj.p_xMeasure);
         end
         
         % % % %         root of spatial covariance
-        function val = get.p_spatialCovRoot(obj)
-            val = sqrtm(obj.p_spatialCovMat);
+        function obj = m_CalcSpatialCovRoot(obj)
+            obj.p_spatialCovRoot =  sqrtm(obj.p_spatialCovMat);
         end
         
         % % % %         gpkf initialization values
-        function val = get.p_gpfkInitVals(obj)
-            val = obj.m_gpkfInitialize();
+        function obj =  gpfkInitialize(obj)
+            obj.p_gpfkInitVals = obj.m_gpkfInitialize();
         end
         
         % % % %         mean function
@@ -122,7 +122,7 @@ classdef GPKF
             switch obj.p_acquisitionFunction
                 case 'upperConfidenceBound'
                     % calculate UCB
-                    val = obj.p_exploitationConstant*predMean + ...
+                    val = obj.p_exploitationConstant.*predMean + ...
                         2^(obj.p_explorationConstant).*postVar;
                 case 'expectedImprovement'
                     % calculate standard deviation
@@ -352,12 +352,13 @@ classdef GPKF
             % % populate the Ik matrix
             for ii = 1:MkNP
                 distFromXm = Mk(ii) - xMeasure;
+                distFromXm = round(distFromXm);
                 [minDis,minIdx] = min(abs(distFromXm));
-                if round(distFromXm(minIdx),3) > 0
+                if distFromXm(minIdx) > 0
                     Ik(ii,minIdx+1) = minDis/...
                         (xMeasure(minIdx+1)-xMeasure(minIdx));
                     Ik(ii,minIdx) = 1 - Ik(ii,minIdx+1);
-                elseif round(distFromXm(minIdx),3) < 0
+                elseif distFromXm(minIdx) < 0
                     Ik(ii,minIdx-1) = minDis/...
                         (xMeasure(minIdx)-xMeasure(minIdx-1));
                     Ik(ii,minIdx) = 1 - Ik(ii,minIdx-1);
@@ -424,11 +425,8 @@ classdef GPKF
                 predHorizon)
             
             % % % dummy variables
-            xMeasure = obj.p_xMeasure;
             matLengths = predHorizon + 1;
             % % % preallocate matrices
-            F_t =  NaN(size(xMeasure,2),matLengths);
-            sigF_t = NaN(size(xMeasure,2),size(xMeasure,2),matLengths);
             predMeanAtLoc = NaN(1,matLengths);
             postVarAtLoc = NaN(1,matLengths);
             % % % obtain prediction mean and posterior variance over the
@@ -442,18 +440,18 @@ classdef GPKF
                     xLocation = traject(jj-1);
                 end
                 % % % stepwise update of kalman state estimate and covariance
-                [F_t(:,jj),sigF_t(:,:,jj),skp1_kp1,ckp1_kp1] = ...
+                [F_t,sigF_t,skp1_kp1,ckp1_kp1] = ...
                     obj.m_gpkfKalmanEstimation(sk_k,ck_k,xLocation,ykPassed);
                 % % % store mean and variance at current location for later
                 [predMeanAtLoc(jj),postVarAtLoc(jj)]...
-                    = obj.m_gpkfRegression(xLocation,F_t(:,jj),sigF_t(:,:,jj));
+                    = obj.m_gpkfRegression(xLocation,F_t,sigF_t);
                 % % % update previous step information
                 sk_k = skp1_kp1;
                 ck_k = ckp1_kp1;
             end
             
-            op.predMeanAtLoc = predMeanAtLoc;
-            op.postVarAtLoc = postVarAtLoc;
+            op.predMeanAtLoc = predMeanAtLoc(2:end);
+            op.postVarAtLoc = postVarAtLoc(2:end);
         end
         
         % % % %         control using mpc
@@ -469,7 +467,6 @@ classdef GPKF
             % % % and acquisition function values for all ctrlComb
             stateTrjectories = NaN(nTraject,predHorizon+1);
             stateTrjectories(:,1) = Mk;
-            aqFunVal = NaN(nTraject,predHorizon+1);
             % % % start the looping
             for ii = 1:nTraject
                 for jj = 2:predHorizon+1
@@ -491,6 +488,8 @@ classdef GPKF
             % remove repeated state trajectories
             [stateTrjectories,ia,~] = unique(stateTrjectories,'rows');
             ctrlComb = ctrlComb(ia,:);
+            aqFunVal = NaN(numel(ia),predHorizon);
+
             for ii = 1:size(stateTrjectories,1)
                 % obtain prediction mean and posterior variance over the
                 % prediction horizon for each state trajectory
@@ -501,6 +500,8 @@ classdef GPKF
                 aqFunVal(ii,:) = obj.m_calcAcquisitionFun(...
                     gpkfPred.predMeanAtLoc(:),...
                     gpkfPred.postVarAtLoc(:),yk)';
+                % % %  weight the aqFun
+                aqFunVal(ii,:) = (predHorizon:-1:1).*aqFunVal(ii,:);
             end
             % % % sum the acquisition function values along the column
             % direction
@@ -512,38 +513,61 @@ classdef GPKF
             val.optCtrlSeq = ctrlComb(bestTrajIdx,:);
             val.objFunVal = maxVal;
             
+            fprintf('Exhaustive search optimization complete.\n')
         end
         
         function val = m_gpkfMPC_fmincon(obj,sk_k,ck_k,Mk,yk,...
-                uLimits,predHorizon)
+                uLimits,predHorizon,numStarts)
             % % % set fmincon parameters
-            % % % bounds
-            lb = Mk + (1:predHorizon).*min(uLimits);
+            % % % constraints
+            % % % upper bounds
             ub = Mk + (1:predHorizon).*max(uLimits);
-            
-            lb(lb<=obj.p_xMeasure(1)) = obj.p_xMeasure(1);
             ub(ub>=obj.p_xMeasure(end)) = obj.p_xMeasure(end);
-            
-            % random trajectory between bounds
-            iniGuess = lb + (ub-lb).*rand(1,predHorizon);
-            
-            options = optimoptions('fmincon','algorithm','sqp');
+            % % % lower bounds
+            lb = Mk + (1:predHorizon).*min(uLimits);
+            lb(lb<=obj.p_xMeasure(1)) = obj.p_xMeasure(1);
+            % % % control bounds
+            A3 = zeros(predHorizon-1,predHorizon);
+            for ii = 1:predHorizon-1
+                A3(ii,ii) = -1;
+                A3(ii,ii+1) = 1;
+            end
+            b3 = ones(predHorizon-1,1)*max(uLimits);
+            A4 = -A3;
+            b4 = ones(predHorizon-1,1)*min(uLimits);
+            A3 = [];
+            A4 = [];
+            b3 = [];
+            b4 = [];
+            % % % fmincon options
+            options = optimoptions('fmincon','algorithm','sqp',...
+                'Display','notify');
+            % % % do a multistart fmincon
+            optTraj = NaN(predHorizon,numStarts);
+            FVAL = NaN(1,numStarts);
+            for ii = 1:numStarts
+            % % % random trajectory between bounds
+            iniGuess = lb + (ub-lb).*rand(size(lb));            
             % % % find optimum trajectory using fmincon
-            [optTraj,FVAL] =  fmincon( @(stateTrajectory) ...
+            [optTraj(:,ii),FVAL(ii)] =  fmincon( @(stateTrajectory) ...
                 -obj.m_objfForFmincon(sk_k,ck_k,...
                 Mk,yk,stateTrajectory,predHorizon),...
-                iniGuess,[],[],[],[],lb,ub,[],options);
+                iniGuess,[A3;A4],[b3;b4],[],[],lb(:),ub(:),[],options);
+            end
+            % % % output
+            [val.objFunValFmin,idx] = max(-FVAL);
+            val.optStateTrajectoryFmin = optTraj(:,idx)';
             
-            [optTrajPSO,FVALPSO] =  particleswarm( @(stateTrajectory) ...
-                -obj.m_objfForFmincon(sk_k,ck_k,...
-                Mk,yk,stateTrajectory,predHorizon),...
-                predHorizon,lb,ub);
+            fprintf('fmincon optimization complete.\n')
             
-            % output
-            val.optStateTrajectoryFmin = optTraj;
-            val.objFunValFmin = -FVAL;
-            val.optStateTrajectoryPso = optTrajPSO;
-            val.objFunValPso = -FVALPSO;
+            % % % find optimum trajectory using PSO
+%             [optTrajPSO,FVALPSO] =  particleswarm( @(stateTrajectory) ...
+%                 -obj.m_objfForFmincon(sk_k,ck_k,...
+%                 Mk,yk,stateTrajectory,predHorizon),...
+%                 predHorizon,lb,ub);
+%             % % % output
+%             val.optStateTrajectoryPso = optTrajPSO;
+%             val.objFunValPso = -FVALPSO;
             
         end
         
@@ -556,10 +580,10 @@ classdef GPKF
             % % % calculate acquisition function values
             aqFunVal = obj.m_calcAcquisitionFun(gpkfPred.predMeanAtLoc(:),...
                 gpkfPred.postVarAtLoc(:),yk);
+            aqFunVal = (predHorizon:-1:1).*aqFunVal(:)';
             val = sum(aqFunVal);
             
         end
-        
         
         % % % %         traditional GP regression
         function [predMean,postVar] = traditionalGpRegression(obj,xVisited,yVisited,...
