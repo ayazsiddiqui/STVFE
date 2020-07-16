@@ -76,7 +76,7 @@ set(findobj('-property','FontSize'),'FontSize',12)
 
 %% video
 % % % video setting
-video = VideoWriter(fName,'Motion JPEG AVI');
+video = VideoWriter(strcat(fName,'_windProf'),'Motion JPEG AVI');
 % % video = VideoWriter('vid_Test1','MPEG-4');
 video.FrameRate = 5;
 set(gca,'nextplot','replacechildren');
@@ -87,3 +87,62 @@ for ii = 1:length(F)
 end
 close(video)
 
+%%
+figure(3)
+set(gcf,'position',x.Position.*[1 0 1 1])
+F = struct('cdata',uint8(zeros(840,1680,3)),'colormap',[]);
+
+for ii = 1:size(optStateTrajBF,1)
+    
+    if ii == 1
+        hold on
+        grid on
+        xlabel('Prediction horizon');
+        ylabel('Altitude (m)');
+        %         xlim([lB-mod(lB,plotRes),uB-mod(uB,plotRes)+plotRes])
+        xlim([0 predHorz+1])
+        ylim([hMin hMax]);
+    else
+        delete(findall(gcf,'type','annotation'));
+        h = findall(gca,'type','line','linestyle','-','-or',...
+            'linestyle','--','-or','linestyle','-x','-or',...
+            'linestyle','-.', '-or','color','m');
+        delete(h);
+        
+    end
+    %     end
+    
+    % % plot true wind
+    %     for jj = 1:predHorz
+    %         subplot(2,2,jj)
+    plBF = stairs(0:predHorz,[initCon(ii) optStateTrajBF(ii,:)],'r--o',...
+        'linewidth',lwd);
+    % % plot measured wind value
+    plFmin = stairs(0:predHorz,[initCon(ii) optStateTrajFmin(ii,:)],'b--o',...
+        'linewidth',lwd);
+    % % legend
+    legend([plBF,plFmin],...
+        'Brute force','SQP');
+    % % title
+    txt1 = sprintf('MPC count:');
+    txt = sprintf(' %d',ii);
+    txt = strcat(txt1,txt);
+    title(txt);
+    %     end
+    ff = getframe(gcf);
+    F(ii).cdata = ff.cdata;
+    
+end
+
+%% video
+% % % video setting
+video = VideoWriter(strcat(fName,'_optSeq'),'Motion JPEG AVI');
+% % video = VideoWriter('vid_Test1','MPEG-4');
+video.FrameRate = 5;
+set(gca,'nextplot','replacechildren');
+
+open(video)
+for ii = 1:length(F)
+    writeVideo(video, F(ii));
+end
+close(video)

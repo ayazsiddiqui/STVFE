@@ -7,7 +7,7 @@ close all
 cd(fileparts(mfilename('fullpath')));
 
 %% generate wind using colored noise
-% rng(56);
+rng(56);
 % environment
 hMax = 1500;
 hMin = 100;
@@ -131,13 +131,14 @@ for ii = 1:noIter
 
         
         % % % store optimal control sequence)
+        initCon(mpcCount,1) = Mk;
         optStateTrajBF(mpcCount,:) = mpcResBF.optStateTrajectory;
         optFvalBF(mpcCount) = mpcResBF.objFunVal;
         optStateTrajFmin(mpcCount,:) = mpcFmincon.optStateTrajectoryFmin;
         optFvalFmin(mpcCount) = mpcFmincon.objFunValFmin;
         
-        chosenTrajectory = mpcFmincon.optStateTrajectoryFmin;
-%         chosenTrajectory = mpcResBF.optStateTrajectory;
+%         chosenTrajectory = mpcFmincon.optStateTrajectoryFmin;
+        chosenTrajectory = mpcResBF.optStateTrajectory;
         mpcCount = mpcCount + 1;
     end
     % % % kalman state estimation
