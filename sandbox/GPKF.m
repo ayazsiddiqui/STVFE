@@ -488,26 +488,17 @@ classdef GPKF
             % remove repeated state trajectories
             [stateTrjectories,ia,~] = unique(stateTrjectories,'rows');
             ctrlComb = ctrlComb(ia,:);
-            aqFunVal = NaN(numel(ia),predHorizon);
+            aqFunVal = NaN(numel(ia),1);
 
             for ii = 1:size(stateTrjectories,1)
                 % obtain prediction mean and posterior variance over the
                 % prediction horizon for each state trajectory
-                gpkfPred = obj.m_predictionGPKF(sk_k,ck_k,...
-                    Mk,yk,stateTrjectories(ii,2:end),...
-                    predHorizon);
-                % % % calculate acquisition function values
-                aqFunVal(ii,:) = obj.m_calcAcquisitionFun(...
-                    gpkfPred.predMeanAtLoc(:),...
-                    gpkfPred.postVarAtLoc(:),yk)';
-                % % %  weight the aqFun
-                aqFunVal(ii,:) = (predHorizon:-1:1).*aqFunVal(ii,:);
+                aqFunVal(ii,1) = obj.m_objfForFmincon(sk_k,ck_k,Mk,...
+                yk,stateTrjectories(ii,2:end),predHorizon);
+            
             end
-            % % % sum the acquisition function values along the column
-            % direction
-            sumAqFun = sum(aqFunVal,2);
             % find the max value and the corresponding state trajectory
-            [maxVal,bestTrajIdx] = max(sumAqFun);
+            [maxVal,bestTrajIdx] = max(aqFunVal);
             % output these two
             val.optStateTrajectory = stateTrjectories(bestTrajIdx,2:end);
             val.optCtrlSeq = ctrlComb(bestTrajIdx,:);
