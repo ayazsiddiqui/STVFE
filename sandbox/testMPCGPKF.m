@@ -79,8 +79,10 @@ MpcGpkf = MpcGpkf.gpfkInitialize;
 % % % prediction horizon
 predHorz = 5;
 % % % allowable control inputs
-uStep = 100;
-uAllowable = uStep*(-2:1:2);
+uStep = 25;
+uRange = 200.*[-1 1];
+uAllowable = uRange(1):uStep:uRange(2);
+
 
 %% do the actual gaussian process kalman filtering
 % % % make a finer domain over which predictions are made
@@ -102,9 +104,11 @@ pointsVisited = NaN(1,noIter);
 fValAtPt = NaN(noIter,1);
 % start off mpc counter
 mpcCount = 1;
-numStarts = 4;
+numStarts = 1;
 
 for ii = 1:noIter
+    % % % sim status
+    fprintf('Simulation status: Iteration %d of %d.\n',ii,noIter);
     % % % visit said points
     if ii == 1 || mpcCount == 1
         visitIdx = randperm(size(EstimationGpkf.p_xMeasure,2),1);
@@ -122,22 +126,25 @@ for ii = 1:noIter
     % % % gpkf MPC
     if mod(tVec(ii),MpcGpkf.p_gpfkTimeStep) == 0 && tVec(ii)~=0
         
-        
+        % % % fmincon results
         mpcFmincon = MpcGpkf.m_gpkfMPC_fmincon(sk_k,ck_k,Mk,yk,...
             uAllowable,predHorz,numStarts);
         
-        mpcResBF = MpcGpkf.m_gpkfMPC_bruteForce(sk_k,ck_k,Mk,yk,...
-            uAllowable,predHorz);
-
-        
-        % % % store optimal control sequence)
-        initCon(mpcCount,1) = Mk;
-        optStateTrajBF(mpcCount,:) = mpcResBF.optStateTrajectory;
-        optFvalBF(mpcCount) = mpcResBF.objFunVal;
         optStateTrajFmin(mpcCount,:) = mpcFmincon.optStateTrajectoryFmin;
         optFvalFmin(mpcCount) = mpcFmincon.objFunValFmin;
         
-%         chosenTrajectory = mpcFmincon.optStateTrajectoryFmin;
+        % % % exhaustive search results
+        mpcResBF = MpcGpkf.m_gpkfMPC_bruteForce(sk_k,ck_k,Mk,yk,...
+            uAllowable,predHorz);
+        
+        optStateTrajBF(mpcCount,:) = mpcResBF.optStateTrajectory;
+        optFvalBF(mpcCount) = mpcResBF.objFunVal; 
+        
+        % % % store optimal control sequence)
+        initCon(mpcCount,1) = Mk;
+
+        % % % chose solution
+%         chosenTrajectory = mpcFmincon.optStateTrajectoryPso;
         chosenTrajectory = mpcResBF.optStateTrajectory;
         mpcCount = mpcCount + 1;
     end
@@ -166,7 +173,7 @@ for ii = 1:noIter
     % % % store points visited at the respective function value
     pointsVisited(:,ii) = Mk;
     fValAtPt(ii,:) = yk;
-    
+        
 end
 
 %% save data to output folder

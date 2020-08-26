@@ -487,16 +487,23 @@ classdef GPKF
             end
             % remove repeated state trajectories
             [stateTrjectories,ia,~] = unique(stateTrjectories,'rows');
+            numUniqueTraj = numel(ia);
             ctrlComb = ctrlComb(ia,:);
-            aqFunVal = NaN(numel(ia),1);
-
-            for ii = 1:size(stateTrjectories,1)
+            aqFunVal = NaN(numUniqueTraj,1);
+            
+            fprintf(['Starting exhaustive search. ',...
+                'Number of unique admissible trajectories: %d.\n'],...
+                numUniqueTraj);
+            tic
+            parfor ii = 1:numUniqueTraj
                 % obtain prediction mean and posterior variance over the
                 % prediction horizon for each state trajectory
                 aqFunVal(ii,1) = obj.m_objfForFmincon(sk_k,ck_k,Mk,...
                 yk,stateTrjectories(ii,2:end),predHorizon);
             
             end
+            fprintf(['Exhaustive search complete. ',...
+                'Elapsed time: %0.2f seconds.\n'],toc);
             % find the max value and the corresponding state trajectory
             [maxVal,bestTrajIdx] = max(aqFunVal);
             % output these two
@@ -504,14 +511,11 @@ classdef GPKF
             val.optCtrlSeq = ctrlComb(bestTrajIdx,:);
             val.objFunVal = maxVal;
             
-            fprintf('Exhaustive search optimization complete.\n')
         end
         
         function val = m_gpkfMPC_fmincon(obj,sk_k,ck_k,Mk,yk,...
                 uLimits,predHorizon,numStarts)
             % % % set fmincon parameters
-            % % % constraints
-            % % % upper bounds
             ub = Mk + (1:predHorizon).*max(uLimits);
             ub(ub>=obj.p_xMeasure(end)) = obj.p_xMeasure(end);
             % % % lower bounds
@@ -526,16 +530,19 @@ classdef GPKF
             b3 = ones(predHorizon-1,1)*max(uLimits);
             A4 = -A3;
             b4 = ones(predHorizon-1,1)*min(uLimits);
-            A3 = [];
-            A4 = [];
-            b3 = [];
-            b4 = [];
+%             A3 = [];
+%             A4 = [];
+%             b3 = [];
+%             b4 = [];
             % % % fmincon options
             options = optimoptions('fmincon','algorithm','sqp',...
                 'Display','notify');
             % % % do a multistart fmincon
             optTraj = NaN(predHorizon,numStarts);
             FVAL = NaN(1,numStarts);
+            fprintf(['Starting multistart fmincon optimization. ',...
+                'Number of starts: %d.\n'],numStarts);
+            tic;
             for ii = 1:numStarts
             % % % random trajectory between bounds
             iniGuess = lb + (ub-lb).*rand(size(lb));            
@@ -545,13 +552,14 @@ classdef GPKF
                 Mk,yk,stateTrajectory,predHorizon),...
                 iniGuess,[A3;A4],[b3;b4],[],[],lb(:),ub(:),[],options);
             end
+            fprintf(['fmincon optimization complete. ',...
+                'Elapsed time: %0.2f seconds.\n'],toc);
             % % % output
             [val.objFunValFmin,idx] = max(-FVAL);
             val.optStateTrajectoryFmin = optTraj(:,idx)';
             
-            fprintf('fmincon optimization complete.\n')
             
-            % % % find optimum trajectory using PSO
+            % % find optimum trajectory using PSO
 %             [optTrajPSO,FVALPSO] =  particleswarm( @(stateTrajectory) ...
 %                 -obj.m_objfForFmincon(sk_k,ck_k,...
 %                 Mk,yk,stateTrajectory,predHorizon),...
