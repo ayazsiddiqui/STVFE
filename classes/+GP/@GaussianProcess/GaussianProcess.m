@@ -264,32 +264,62 @@ classdef GaussianProcess
             val.opt_temporalLengthScale = optVals(end);
         end
         
+        % update object to use the optimized hyper-parameters
+        function obj = setOptimumHyperParameters(obj,val)
+           obj.spatialCovAmp       = val.opt_spatialCovAmp;
+           obj.spatialLengthScale  = val.opt_spatialLengthScale;
+           obj.temporalCovAmp      = val.opt_temporalCovAmp;
+           obj.temporalLengthScale = val.opt_temporalLengthScale;
+        end
+        
     end
     
-    %% regression methods
+    %% regression related methods
     methods
         % calculate prediction mean and posterior variance. Rasmussen pg. 17
-        function [predMean,postVar] = calcPredMeanAndPostVar(obj,covMat,XT,y,xStar)
+        function [predMean,postVar] = calcPredMeanAndPostVar(obj,...
+                covMat,XT,y,xStar)
             % local variables
             nTestPoints = size(xStar,2);
             nTrainPoints = numel(y);
             % pre-allocate matrices
-            kx_xstar = NaN(nTrainPoints,nTestPoints);
+            kx_xstar     = NaN(nTrainPoints,nTestPoints);
             kxstar_xstar = NaN(nTestPoints,1);
             % for kx_xstart and kxstar_xstar
             for ii = 1:nTestPoints
                 for jj = 1:nTrainPoints
-                    kx_xstar(jj,ii) = obj.calcTotalCovariance(xStar(1:end-1,ii),XT(1:end-1,jj)...
-                        ,xStar(end,ii),XT(end,jj));
+                    kx_xstar(jj,ii) = ...
+                        obj.calcTotalCovariance(xStar(1:end-1,ii),...
+                        XT(1:end-1,jj),xStar(end,ii),XT(end,jj));
                 end
-                kxstar_xstar(ii) = obj.calcTotalCovariance(xStar(1:end-1,ii),xStar(1:end-1,ii)...
-                    ,xStar(end,ii),xStar(end,ii));
+                kxstar_xstar(ii) = ...
+                    obj.calcTotalCovariance(xStar(1:end-1,ii),...
+                    xStar(1:end-1,ii),xStar(end,ii),xStar(end,ii));
+%                 % prediction mean
+%                 predMean2(ii) = kx_xstar(:,ii)'*((covMat +...
+%                     obj.noiseVariance*eye(nTrainPoints))\y);
+%                 % posterior variance
+%                 postVar2(ii) = kxstar_xstar(ii) - ...
+%                     kx_xstar(:,ii)'*((covMat + ...
+%                     obj.noiseVariance*eye(numel(y)))\kx_xstar(:,ii));
             end
+
+            % local variables to avoid taking matrix inverse twice
+            Ky = covMat + obj.noiseVariance*eye(nTrainPoints);
+            kInvK = kx_xstar'/Ky;
             % prediction mean
-            predMean = kx_xstar'*(covMat + obj.noiseVariance*eye(nTrainPoints))\y;
+            predMean = kInvK*y;
             % posterior variance
-            postVar = kxstar_xstar - ...
-                kx_xstar'*(covMat + obj.noiseVariance*eye(numel(y)))\kx_xstar;
+            postVar = kxstar_xstar - diag(kInvK*kx_xstar);
+            
+%             % prediction mean
+%             predMean3 = kx_xstar'*((covMat +...
+%                 obj.noiseVariance*eye(nTrainPoints))\y);
+%             
+%             postVar3 = kxstar_xstar - ...
+%                 diag(kx_xstar'*((covMat + ...
+%                 obj.noiseVariance*eye(numel(y)))\kx_xstar));
+
         end
         
         % guassian process regression
@@ -306,14 +336,13 @@ classdef GaussianProcess
             for ii = 1:npOld
                 for jj = 1:npNew
                     kxold_xnew(ii,jj) = ...
-                        obj.calcTotalCovariance(XT_old(1:end-1,ii),XT_new(1:end-1,jj),...
-                        XT_old(end,ii),XT_new(end,jj));
+                        obj.calcTotalCovariance(XT_old(1:end-1,ii),...
+                        XT_new(1:end-1,jj),XT_old(end,ii),XT_new(end,jj));
                 end
             end
             kxnew_xnew = obj.makeTotalCovarianceMatrix(XT_new);
             % append to covMat
             covMatOut = [covMat kxold_xnew; kxold_xnew' kxnew_xnew];
-            
         end
         
     end
