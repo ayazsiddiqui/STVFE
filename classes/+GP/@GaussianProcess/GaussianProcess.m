@@ -1,7 +1,6 @@
 classdef GaussianProcess
-    %GAUSSIANPROCESS Summary of this class goes here
-    %   Detailed explanation goes here
     
+    % initialization requirements
     properties (SetAccess = protected)
         numberOfSpatialInputs
         spatialKernel
@@ -17,6 +16,7 @@ classdef GaussianProcess
         noiseVariance
     end
     
+    % class parameters
     properties (SetAccess = protected)
         kernelChoices = {'exponential','squaredExponential'};
     end
@@ -266,7 +266,57 @@ classdef GaussianProcess
         
     end
     
-    %%
+    %% regression methods
+    methods
+        % calculate prediction mean and posterior variance. Rasmussen pg. 17
+        function [predMean,postVar] = calcPredMeanAndPostVar(obj,covMat,XT,y,xStar)
+            % local variables
+            nTestPoints = size(xStar,2);
+            nTrainPoints = numel(y);
+            % pre-allocate matrices
+            kx_xstar = NaN(nTrainPoints,nTestPoints);
+            kxstar_xstar = NaN(nTestPoints,1);
+            % for kx_xstart and kxstar_xstar
+            for ii = 1:nTestPoints
+                for jj = 1:nTrainPoints
+                    kx_xstar(jj,ii) = obj.calcTotalCovariance(xStar(1:end-1,ii),XT(1:end-1,jj)...
+                        ,xStar(end,ii),XT(end,jj));
+                end
+                kxstar_xstar(ii) = obj.calcTotalCovariance(xStar(1:end-1,ii),xStar(1:end-1,ii)...
+                    ,xStar(end,ii),xStar(end,ii));
+            end
+            % prediction mean
+            predMean = kx_xstar'*(covMat + obj.noiseVariance*eye(nTrainPoints))\y;
+            % posterior variance
+            postVar = kxstar_xstar - ...
+                kx_xstar'*(covMat + obj.noiseVariance*eye(numel(y)))\kx_xstar;
+        end
+        
+        % guassian process regression
+        function covMatOut = augmentCovarianceMatrix(obj,XT_old,XT_new,covMat)
+            % make covariance matrix if it's empty
+            if isempty(covMat)
+                covMat = obj.makeTotalCovarianceMatrix(XT_old);
+            end
+            % local variables
+            npOld = size(XT_old,2);
+            npNew = size(XT_new,2);
+            % calculate covariance of old points with the new one
+            kxold_xnew = NaN(npOld,npNew);
+            for ii = 1:npOld
+                for jj = 1:npNew
+                    kxold_xnew(ii,jj) = ...
+                        obj.calcTotalCovariance(XT_old(1:end-1,ii),XT_new(1:end-1,jj),...
+                        XT_old(end,ii),XT_new(end,jj));
+                end
+            end
+            kxnew_xnew = obj.makeTotalCovarianceMatrix(XT_new);
+            % append to covMat
+            covMatOut = [covMat kxold_xnew; kxold_xnew' kxnew_xnew];
+            
+        end
+        
+    end
     
     
     
