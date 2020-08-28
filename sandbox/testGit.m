@@ -3,4 +3,4 @@ clc
 
 %% sda
 ff = 1;
-ff = 2;
+ff1 = 2;
