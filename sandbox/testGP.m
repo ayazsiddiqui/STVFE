@@ -61,14 +61,11 @@ for ii = 1:noIter
         yTrain,xtQuery);
     
     scPlot = scatter3(xQuery,tQuery,predMean,'ro');
+    keyboard
     
 end
 
 
 
 
-
-
-%
-% 
 
