@@ -34,7 +34,7 @@ hold on; grid on;
 set(gcf,'Position',[-9 133 560 420]);
 
 % number of iterations
-noIter = 10;
+noIter = 6;
 covMat = gp.makeTotalCovarianceMatrix(XTtrain);
 for ii = 1:noIter
     if ii > 1
