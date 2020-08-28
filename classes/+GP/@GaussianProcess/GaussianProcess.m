@@ -266,10 +266,10 @@ classdef GaussianProcess
         
         % update object to use the optimized hyper-parameters
         function obj = setOptimumHyperParameters(obj,val)
-           obj.spatialCovAmp       = val.opt_spatialCovAmp;
-           obj.spatialLengthScale  = val.opt_spatialLengthScale;
-           obj.temporalCovAmp      = val.opt_temporalCovAmp;
-           obj.temporalLengthScale = val.opt_temporalLengthScale;
+            obj.spatialCovAmp       = val.opt_spatialCovAmp;
+            obj.spatialLengthScale  = val.opt_spatialLengthScale;
+            obj.temporalCovAmp      = val.opt_temporalCovAmp;
+            obj.temporalLengthScale = val.opt_temporalLengthScale;
         end
         
     end
@@ -295,15 +295,15 @@ classdef GaussianProcess
                 kxstar_xstar(ii) = ...
                     obj.calcTotalCovariance(xStar(1:end-1,ii),...
                     xStar(1:end-1,ii),xStar(end,ii),xStar(end,ii));
-%                 % prediction mean
-%                 predMean2(ii) = kx_xstar(:,ii)'*((covMat +...
-%                     obj.noiseVariance*eye(nTrainPoints))\y);
-%                 % posterior variance
-%                 postVar2(ii) = kxstar_xstar(ii) - ...
-%                     kx_xstar(:,ii)'*((covMat + ...
-%                     obj.noiseVariance*eye(numel(y)))\kx_xstar(:,ii));
+                %                 % prediction mean
+                %                 predMean2(ii) = kx_xstar(:,ii)'*((covMat +...
+                %                     obj.noiseVariance*eye(nTrainPoints))\y);
+                %                 % posterior variance
+                %                 postVar2(ii) = kxstar_xstar(ii) - ...
+                %                     kx_xstar(:,ii)'*((covMat + ...
+                %                     obj.noiseVariance*eye(numel(y)))\kx_xstar(:,ii));
             end
-
+            
             % local variables to avoid taking matrix inverse twice
             Ky = covMat + obj.noiseVariance*eye(nTrainPoints);
             kInvK = kx_xstar'/Ky;
@@ -312,14 +312,14 @@ classdef GaussianProcess
             % posterior variance
             postVar = kxstar_xstar - diag(kInvK*kx_xstar);
             
-%             % prediction mean
-%             predMean3 = kx_xstar'*((covMat +...
-%                 obj.noiseVariance*eye(nTrainPoints))\y);
-%             
-%             postVar3 = kxstar_xstar - ...
-%                 diag(kx_xstar'*((covMat + ...
-%                 obj.noiseVariance*eye(numel(y)))\kx_xstar));
-
+            %             % prediction mean
+            %             predMean3 = kx_xstar'*((covMat +...
+            %                 obj.noiseVariance*eye(nTrainPoints))\y);
+            %
+            %             postVar3 = kxstar_xstar - ...
+            %                 diag(kx_xstar'*((covMat + ...
+            %                 obj.noiseVariance*eye(numel(y)))\kx_xstar));
+            
         end
         
         % guassian process regression
@@ -347,8 +347,12 @@ classdef GaussianProcess
         
     end
     
-    
-    
+    %% external methods
+%     methods
+%         function val = generateSyntheticFlowData(obj,x,y)
+%             val = generateSyntheticFlowData(obj,x,y);
+%         end
+%     end
     
     
 end

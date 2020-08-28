@@ -2,11 +2,26 @@ clear
 clc
 close all
 
-%% generate synthetic data
-% dummy function
-fxt = @(x,t) sin(sqrt(x.^2 + t.^2) + eps)./(sqrt(x.^2 + t.^2) + eps);
-[X,T] = meshgrid(-8:0.5:8);
-Y = fxt(X,T);
+%% generate synthetic flow data
+% altitudes
+altitudes = 0:10:100;
+% altitude length scale
+altitudeLenghtScale = 10;
+% final time for data generation in minutes
+tFinData = 30;
+% temporal length scale
+temporalLengthScale = 10;
+% time step for synthetic data generation
+timeStepSynData = 1;
+% standard deviation for synthetic data generation
+stdDevSynData = 1;
+% get the time series object
+synFlow = generateSyntheticWindData(altitudes,altitudeLenghtScale,...
+    temporalLengthScale,tFinData,stdDevSynData,'timeStep',timeStepSynData);
+
+%% initialize 
+
+
 
 %% create gp class object
 gp = GP.GaussianProcess(1,'squaredExponential','squaredExponential');
@@ -53,8 +68,8 @@ for ii = 1:noIter
     XTtrain = [XTtrain XTNew];
     yTrain  = [yTrain; yNew];
     if ii < 6
-    optHyp = gp.findOptSpatioTemporalHyperParams(XTtrain,yTrain,iniGuess);
-    gp = gp.setOptimumHyperParameters(optHyp);
+        optHyp = gp.findOptSpatioTemporalHyperParams(XTtrain,yTrain,iniGuess);
+        gp = gp.setOptimumHyperParameters(optHyp);
     end
     % regression
     [predMean,postVar] = gp.calcPredMeanAndPostVar(covMat,XTtrain,...

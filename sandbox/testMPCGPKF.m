@@ -11,13 +11,13 @@ rng(56);
 % environment
 hMax = 1500;
 hMin = 100;
-heights = hMin:100:hMax;
+heights = hMin:500:hMax;
 heights = heights(:);
 meanFlow = 0;
 noTP = numel(heights);
 % time in minutes
-timeStep = 0.05*5;
-tVec = 0:timeStep:1*60;
+timeStep = 5;
+tVec = 0:timeStep:1*10;
 noTimeSteps = numel(tVec);
 % time in seconds
 timeInSec = 60*tVec;
@@ -42,6 +42,9 @@ end
 simTime = 1*60*60;
 Heights = timeseries(repmat(heights,1,1,2),[0 simTime]);
 Flows = timeseries(Flows,timeInSec);
+
+synFlows = generateSyntheticWindData(heights,heightScale,...
+    timeScale,tVec(end),stdDev,'timeStep',timeStep);
 
 %% set up the KFGP classdef
 % construct an instance of the RGP class: squaredExponential or exponential
