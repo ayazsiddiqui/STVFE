@@ -23,12 +23,13 @@ timeStepSynData = 1;
 % standard deviation for synthetic data generation
 stdDevSynData = 1;
 % get the time series object
-synFlow = gp.generateSyntheticFlowData(altitudes,tFinData,stdDevSynData,...
+[synFlow,synAlt] = gp.generateSyntheticFlowData(altitudes,tFinData,stdDevSynData,...
     'timeStep',timeStepSynData);
 
 
-%% initialize 
 
+%% initialize 
+F = gp.animatedPlot(tsStrcut)
 
 
 %% create gp class object

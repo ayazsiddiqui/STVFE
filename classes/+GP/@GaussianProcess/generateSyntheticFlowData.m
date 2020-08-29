@@ -1,4 +1,4 @@
-function val = generateSyntheticFlowData(obj,altitudes,...
+function [val,varargout] = generateSyntheticFlowData(obj,altitudes,...
     finalTime,stdDev,varargin)
 % parse inputs
 pp = inputParser;
@@ -46,7 +46,12 @@ filterSamp = (Lz*(Lt*samp')') + M;
 filterSamp = filterSamp(6:end-5,6:end-5);
 
 % convert time to seconds and output a time series object
-val = timeseries(filterSamp,timeVals(6:end-5)*60,'Name','SyntheticFlowData');
+timeInSec = timeVals(6:end-5)*60;
+val = timeseries(filterSamp,timeInSec,'Name','SyntheticFlowData');
+
+% extra outputs
+varargout{1} = ...
+    timeseries(repmat(altitudes,1,1,2),[timeInSec(1) timeInSec(end)]);
 
 end
 
