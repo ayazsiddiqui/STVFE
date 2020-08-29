@@ -4,14 +4,14 @@ function val = generateSyntheticFlowData(obj,altitudes,...
 pp = inputParser;
 addParameter(pp,'timeStep',1,@isnumeric);
 addParameter(pp,'meanFunc',@(x) 0);
-addParameter(pp,'temporalLengthScale',obj.spatialLengthScale);
+addParameter(pp,'spatialLengthScale',obj.spatialLengthScale);
 addParameter(pp,'temporalLengthScale',obj.temporalLengthScale);
 
 parse(pp,varargin{:});
 
 % use the gaussian process classdef to calculate the covariances
 obj.spatialCovAmp = 1;
-obj.spatialLengthScale = pp.Results.temporalLengthScale;
+obj.spatialLengthScale = pp.Results.spatialLengthScale;
 obj.temporalCovAmp = 1;
 obj.temporalLengthScale = pp.Results.temporalLengthScale;
 
@@ -25,9 +25,8 @@ tstep = pp.Results.timeStep;
 altitudes = (altitudes(1)-5*zstep):zstep:(altitudes(end)+5*zstep);
 timeVals = (timeVals(1)-5*tstep):tstep:(timeVals(end)+5*tstep);
 
-spatialCovMat = obj.makeSpatialCovarianceMatrix(altitudes);
-
 % altitude covariances
+spatialCovMat = obj.makeSpatialCovarianceMatrix(altitudes);
 spatialCovMat = spatialCovMat + noiseVar*eye(numel(altitudes));
 Lz = chol(spatialCovMat);
 
