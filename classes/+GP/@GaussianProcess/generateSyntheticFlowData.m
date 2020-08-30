@@ -47,11 +47,12 @@ filterSamp = filterSamp(6:end-5,6:end-5);
 
 % convert time to seconds and output a time series object
 timeInSec = timeVals(6:end-5)*60;
+altitudes = altitudes(6:end-5);
 val = timeseries(filterSamp,timeInSec,'Name','SyntheticFlowData');
 
 % extra outputs
 varargout{1} = ...
-    timeseries(repmat(altitudes,1,1,2),[timeInSec(1) timeInSec(end)]);
+    timeseries(repmat(altitudes(:),1,1,2),[timeInSec(1) timeInSec(end)]);
 
 end
 
