@@ -54,7 +54,7 @@ stdDevSynData = 0.5;
 % sampling time step
 dt = kfgp.kfgpTimeStep;
 % algorithm final time
-algFinTime = 30;
+algFinTime = 10;
 % sampling time vector
 tSamp = 0:dt:algFinTime;
 % number of samples

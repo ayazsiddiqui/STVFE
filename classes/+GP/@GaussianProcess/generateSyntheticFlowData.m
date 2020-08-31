@@ -19,21 +19,21 @@ obj.temporalLengthScale = pp.Results.temporalLengthScale;
 noiseVar = 0.0001;
 timeVals = 0:pp.Results.timeStep:finalTime;
 
-% IDK why this is here, but Ben has it so I am leaving it
-zstep = altitudes(2) - altitudes(1);
-tstep = pp.Results.timeStep;
-altitudes = (altitudes(1)-5*zstep):zstep:(altitudes(end)+5*zstep);
-timeVals = (timeVals(1)-5*tstep):tstep:(timeVals(end)+5*tstep);
+% % IDK why this is here, but Ben has it so I am leaving it
+% zstep = mean(diff(altitudes));
+% tstep = pp.Results.timeStep;
+% altitudes = (altitudes(1)-5*zstep):zstep:(altitudes(end)+5*zstep);
+% timeVals = (timeVals(1)-5*tstep):tstep:(timeVals(end)+5*tstep);
 
 % altitude covariances
 spatialCovMat = obj.makeSpatialCovarianceMatrix(altitudes);
 spatialCovMat = spatialCovMat + noiseVar*eye(numel(altitudes));
-Lz = chol(spatialCovMat);
+Lz = chol(spatialCovMat,'lower');
 
 % time covariances
 temporalCovMat = obj.makeTemporalCovarianceMatrix(timeVals);
 temporalCovMat = temporalCovMat + noiseVar*eye(numel(timeVals));
-Lt = chol(temporalCovMat);
+Lt = chol(temporalCovMat,'lower');
 
 % random sampling
 samp = stdDev*(randn(numel(altitudes),numel(timeVals)));
@@ -43,14 +43,17 @@ samp = stdDev*(randn(numel(altitudes),numel(timeVals)));
 
 % output
 filterSamp = (Lz*(Lt*samp')') + M;
-filterSamp = filterSamp(6:end-5,6:end-5);
 
 % convert time to seconds and output a time series object
-timeInSec = timeVals(6:end-5)*60;
-altitudes = altitudes(6:end-5);
-val = timeseries(filterSamp,timeInSec,'Name','SyntheticFlowData');
+timeInSec = timeVals*60;
 
-% extra outputs
+% select values from 6 to end-5
+% filterSamp = filterSamp(6:end-5,6:end-5);
+% timeInSec  = timeInSec(6:end-5);
+% altitudes  = altitudes(6:end-5);
+
+% outputs
+val = timeseries(filterSamp,timeInSec,'Name','SyntheticFlowData');
 varargout{1} = ...
     timeseries(repmat(altitudes(:),1,1,2),[timeInSec(1) timeInSec(end)]);
 
