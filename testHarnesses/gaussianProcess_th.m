@@ -8,7 +8,7 @@ cd(fileparts(mfilename('fullpath')));
 %% initialize GP
 rng(1);
 
-gp = GP.GaussianProcess(1,'squaredExponential','exponential');
+gp = GP.GaussianProcess('squaredExponential','exponential');
 
 gp.spatialCovAmp       = 1;
 gp.spatialLengthScale  = 20;

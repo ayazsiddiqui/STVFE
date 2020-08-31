@@ -29,7 +29,6 @@ colorOrder = [228,26,28
 % number of time steps
 nTs = numel(tVec);
 
-
 % regression data availabe
 regDataAvailable = ~any(ismember(pp.UsingDefaults,{'regressionResults'}));
 
@@ -37,6 +36,7 @@ if regDataAvailable
     regRes = pp.Results.regressionResults;
     tVecData = regRes(1).predMean.Time(1):pp.Results.plotTimeStep*60:...
         regRes(1).predMean.Time(end);
+    nTs = numel(tVecData);
     ub = nan(numel(regRes),1);
     lb = nan(numel(regRes),1);
     
@@ -79,6 +79,8 @@ axisObj.XLim = [xLoLim xHiLim];
 % create flow plot object
 plotFlowObj = plot(flowVals(:,:,1),altVals(:,1,1),'k-',...
     'linewidth',1);
+legend(plotFlowObj,'Flow');
+
 if regDataAvailable
     pMeanData = gobjects;
     plbData   = gobjects;
@@ -86,7 +88,7 @@ if regDataAvailable
     pSampData = gobjects;
     
     for ii = 1:numel(regRes)
-        pMeanData(ii) = plot(regRes(ii).predMean.Data(:,1,1),altVals(:,1,1),'-o',...
+        pMeanData(ii) = plot(regRes(ii).predMean.Data(:,1,1),altVals(:,1,1),'-',...
             'color',colorOrder(ii,:));
         plbData(ii) = plot(regRes(ii).loBound.Data(:,1,1),altVals(:,1,1),'--',...
             'color',colorOrder(ii,:));
@@ -95,6 +97,7 @@ if regDataAvailable
         pSampData(ii) = plot(regRes(ii).dataSamp.Data(2,1,1),...
             regRes(ii).dataSamp.Data(1,1,1),'mo');
     end
+    legend([plotFlowObj;pMeanData(:)],[{'Flow'},{regRes(:).legend}])
 end
 
 
@@ -111,13 +114,14 @@ for ii = 2:nTs
     if regDataAvailable && tVec(ii) <= max(tVecData)
         for jj = 1:numel(regRes)
             pMeanData(jj).XData = regRes(jj).predMean.Data(:,1,ii);
-            plbData(jj).XData = regRes(jj).loBound.Data(:,1,ii);
-            pubData(jj).XData = regRes(jj).upBound.Data(:,1,ii);
+            plbData(jj).XData = real(regRes(jj).loBound.Data(:,1,ii));
+            pubData(jj).XData = real(regRes(jj).upBound.Data(:,1,ii));
             pSampData(jj).XData = regRes(jj).dataSamp.Data(2,1,ii);
             pSampData(jj).YData = regRes(jj).dataSamp.Data(1,1,ii);
             
         end
     end
+    
     title(sprintf('Time = %.2f min',tVec(ii)/60));
 
     % get frame for animation

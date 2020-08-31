@@ -2,7 +2,6 @@ classdef GaussianProcess
     
     % initialization requirements
     properties (SetAccess = protected)
-        numberOfSpatialInputs
         spatialKernel
         temporalKernel
     end
@@ -23,10 +22,9 @@ classdef GaussianProcess
     
     %% constructor
     methods
-        function obj = GaussianProcess(noSpatialIps,spatialKernel,...
+        function obj = GaussianProcess(spatialKernel,...
                 temporalKernel)
             % set number of spatial inputs
-            obj.numberOfSpatialInputs = noSpatialIps;
             obj.temporalKernel        = 'exponential';
             obj.spatialKernel         = 'squaredExponential';
             
