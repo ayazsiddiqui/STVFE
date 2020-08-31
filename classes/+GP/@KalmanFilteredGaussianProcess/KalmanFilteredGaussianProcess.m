@@ -5,10 +5,24 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
         kfgpTimeStep
     end
     
+    % initialization properties
     properties
         initVals
         spatialCovMat
         spatialCovMatRoot
+    end
+    
+    % application specific properties
+    properties
+        tetherLength
+    end
+    
+    % MPC properties
+    properties
+        exploitationConstant
+        explorationConstant
+        predictionHorizon
+        
     end
     
     %% constructor
@@ -160,6 +174,55 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
             end
         end
         
+    end
+    
+    %% optimization related methods
+    methods
+        % calculate aquistion function
+        function [val,varargout] = calcAquisitionFunction(obj,meanElevation,F_t,sigF_t)
+            % convert elevation angle to altitude
+            xPredict = obj.tetherLength*sind(meanElevation);
+            % calculate prediction mean and posterior variance
+            [flowPred,flowVar] = obj.calcPredMeanAndPostVar(xPredict,F_t,sigF_t);
+            % exploitation incentive
+            jExploit = obj.exploitationConstant*(flowPred.*cosd(meanElevation)).^3;
+            % exploration incentive
+            jExplore = obj.explorationConstant*flowVar;
+            % sum
+            val = jExploit + jExplore;
+            % other outputs
+            varargout{1} = jExploit;
+            varargout{2} = jExplore;
+        end
+        
+        % calculate MPC objective function
+        function val = calcMpcObjectiveFn(obj,sk_k,ck_k,meanElev0,uTrajectory)
+            % local variables
+            predHorz = obj.predictionHorizon;
+            Mk = nan(1,predHorz);
+            meanElev = nan(1,predHorz);
+            aqVal = nan(1,predHorz);
+            for ii = 1:predHorz
+                if ii == 1
+                    meanElev(ii) = meanElev0 + uTrajectory(ii);
+                else
+                    meanElev(ii) = meanElev(ii-1) + uTrajectory(ii);
+                end
+                % update current altitude
+                Mk(ii) = obj.tetherLength*sind(meanElev(ii));
+                % perform kalman state estimation
+                [F_t,sigF_t,skp1_kp1,ckp1_kp1] = ...
+                    kfgp.calcKalmanStateEstimates(sk_k,ck_k,Mk(ii),[]);
+                % calculate acquistion function
+                aqVal(ii) = obj.calcAquisitionFunction(meanElev(ii),F_t,sigF_t);
+                % update kalman states
+                sk_k = skp1_kp1;
+                ck_k = ckp1_kp1;
+]            end
+            % mpc objective function val
+            val = sum(aqVal);
+            
+        end
     end
     
 end
