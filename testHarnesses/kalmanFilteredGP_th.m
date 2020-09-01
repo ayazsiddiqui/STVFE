@@ -87,7 +87,7 @@ mpckfgp.initVals = mpckfgp.initializeKFGP;
 mpckfgp.spatialCovMat = mpckfgp.makeSpatialCovarianceMatrix(altitudes);
 mpckfgp.spatialCovMatRoot = mpckfgp.calcSpatialCovMatRoot;
 
-mpckfgp.tetherLength         = 200;
+mpckfgp.tetherLength         = 100;
 
 % acquistion function parameters
 mpckfgp.exploitationConstant = 0;
@@ -114,7 +114,8 @@ fsBoundsA(1,1) = 1;
 fsBoundsA(2,1) = -1;
 A = [fsBoundsA;Astep];
 % upper and lower bounds
-lb = 10*ones(1,predictionHorz);
+minElev = asin(min(altitudes)/mpckfgp.tetherLength)*180/pi;
+lb = minElev*ones(1,predictionHorz);
 maxElev = asin(max(altitudes)/mpckfgp.tetherLength)*180/pi;
 ub = maxElev*ones(1,predictionHorz);
 
@@ -168,22 +169,22 @@ for ii = 1:nSamp
     if ii>1 && mod(tSamp(ii),mpckfgp.kfgpTimeStep)==0
         % use fminc to solve for best trajectory
         [bestTraj,mpcObj] = ...
-            fmincon(@(u)-mpckfgp.calcMpcObjectiveFn(sk_k,ck_k,u),...
+            fmincon(@(u)-mpckfgp.calcMpcObjectiveFn(skp1_kp1,ckp1_kp1,u),...
             meanElevation*ones(predictionHorz,1),A,b,[],[],...
             lb,ub,[],options);
         % get other values
         [~,jExploit,jExplore] = ...
-            mpckfgp.calcMpcObjectiveFn(sk_k,ck_k,bestTraj);
+            mpckfgp.calcMpcObjectiveFn(skp1_kp1,ckp1_kp1,bestTraj);
         % brute force
         bruteForceTraj = ...
-            mpckfgp.bruteForceTrajectoryOpt(sk_k,ck_k,meanElevation,...
+            mpckfgp.bruteForceTrajectoryOpt(skp1_kp1,ckp1_kp1,meanElevation,...
             uAllowable,lb(1),ub(1));
         % get other values
         [~,jExploitBF,jExploreBF] = ...
-            mpckfgp.calcMpcObjectiveFn(sk_k,ck_k,bruteForceTraj);
+            mpckfgp.calcMpcObjectiveFn(skp1_kp1,ckp1_kp1,bruteForceTraj);
         % next point
-%         nextPoint = bestTraj(1);
-        nextPoint = mpckfgp.tetherLength*sind(bruteForceTraj(1));
+        nextPoint = mpckfgp.tetherLength*sind(bestTraj(1));        
+%         nextPoint = mpckfgp.tetherLength*sind(bruteForceTraj(1));
         disp(tSamp(ii));
     end
     
