@@ -157,6 +157,8 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
             Vx       = NaN(xPredictNp,1);
             predMean = NaN(xPredictNp,1);
             postVar  = NaN(xPredictNp,1);
+            mXstar = NaN(xPredictNp,1);
+            mX = obj.meanFunction(obj.xMeasure)';
             % perform regression on each point in the domain
             for ii = 1:xPredictNp
                 for jj = 1:xDomainNP
@@ -166,7 +168,10 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
                 Vx(ii,1) = h0*obj.calcSpatialCovariance(...
                     xPredict(:,ii),xPredict(:,ii));
                 % % predicted mean as per Todescato Eqn. (17)
-                predMean(ii,1) = sigmaX(ii,:)*(Vf\F_t);
+                mXstar(ii) = obj.meanFunction(xPredict(:,ii));
+                
+                predMean(ii,1) = mXstar(ii) + ...
+                    sigmaX(ii,:)*(Vf\(F_t - mX));
                 % % posterior variance as per Todescato Eqn. (18)
                 postVar(ii,:) = Vx(ii,1) - ...
                     sigmaX(ii,:)*(Vf\(Vf - sigF_t))*...

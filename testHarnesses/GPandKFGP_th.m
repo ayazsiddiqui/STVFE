@@ -10,12 +10,12 @@ rng(1);
 
 % altitudes
 altitudes = 0:10:100;
-kfgpTimeStep = 0.25;
+kfgpTimeStep = 2;
 
 % spatial kernel
 
 kfgp = GP.KalmanFilteredGaussianProcess('squaredExponential','exponential',...
-    'windPowerLaw',altitudes,kfgpTimeStep);
+    'zeroMean',altitudes,kfgpTimeStep);
 
 kfgp.spatialCovAmp       = 1;
 kfgp.spatialLengthScale  = 20;
@@ -29,7 +29,7 @@ kfgp.spatialCovMatRoot = kfgp.calcSpatialCovMatRoot;
 
 
 % guassian process
-gp = GP.GaussianProcess('squaredExponential','exponential','windPowerLaw');
+gp = GP.GaussianProcess('squaredExponential','exponential','zeroMean');
 
 gp.spatialCovAmp       = kfgp.spatialCovAmp;
 gp.spatialLengthScale  = kfgp.spatialLengthScale;

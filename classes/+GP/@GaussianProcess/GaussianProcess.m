@@ -326,13 +326,6 @@ classdef GaussianProcess
                 kxstar_xstar(ii) = ...
                     obj.calcTotalCovariance(xStar(1:end-1,ii),...
                     xStar(1:end-1,ii),xStar(end,ii),xStar(end,ii));
-                %                 % prediction mean
-                %                 predMean2(ii) = kx_xstar(:,ii)'*((covMat +...
-                %                     obj.noiseVariance*eye(nTrainPoints))\y);
-                %                 % posterior variance
-                %                 postVar2(ii) = kxstar_xstar(ii) - ...
-                %                     kx_xstar(:,ii)'*((covMat + ...
-                %                     obj.noiseVariance*eye(numel(y)))\kx_xstar(:,ii));
             end
             
             % local variables to avoid taking matrix inverse twice
@@ -344,15 +337,7 @@ classdef GaussianProcess
             predMean = mXstar + kInvK*(y-mX);
             % posterior variance
             postVar = kxstar_xstar - diag(kInvK*kx_xstar);
-            
-            %             % prediction mean
-            %             predMean3 = kx_xstar'*((covMat +...
-            %                 obj.noiseVariance*eye(nTrainPoints))\y);
-            %
-            %             postVar3 = kxstar_xstar - ...
-            %                 diag(kx_xstar'*((covMat + ...
-            %                 obj.noiseVariance*eye(numel(y)))\kx_xstar));
-            
+                        
         end
         
         % guassian process regression
