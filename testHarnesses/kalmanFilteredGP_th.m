@@ -15,7 +15,7 @@ kfgpTimeStep = 0.05;
 % spatial kernel
 
 kfgp = GP.KalmanFilteredGaussianProcess('squaredExponential','exponential',...
-    altitudes,kfgpTimeStep);
+    'windPowerLaw',altitudes,kfgpTimeStep);
 
 kfgp.spatialCovAmp       = 1;
 kfgp.spatialLengthScale  = 20;
@@ -75,7 +75,7 @@ predictionHorz  = 4;
 options = optimoptions('fmincon','algorithm','sqp','display','off');
 % make new KFGP to maintain MPC calculations
 mpckfgp = GP.KalmanFilteredGaussianProcess('squaredExponential','exponential',...
-    altitudes,mpckfgpTimeStep);
+    'windPowerLaw',altitudes,mpckfgpTimeStep);
 
 mpckfgp.spatialCovAmp       = kfgp.spatialCovAmp;
 mpckfgp.spatialLengthScale  = kfgp.spatialLengthScale;
