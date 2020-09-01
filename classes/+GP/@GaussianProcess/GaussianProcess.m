@@ -4,6 +4,7 @@ classdef GaussianProcess
     properties (SetAccess = protected)
         spatialKernel
         temporalKernel
+        meanFunction
     end
     
     % hyper-parameter properties
@@ -18,20 +19,29 @@ classdef GaussianProcess
     % class parameters
     properties (SetAccess = protected)
         kernelChoices = {'exponential','squaredExponential'};
+        meanFnChoices = {'zeroMean','windPowerLaw'};
     end
     
     %% constructor
     methods
         function obj = GaussianProcess(spatialKernel,...
-                temporalKernel)
-            % set number of spatial inputs
-            obj.temporalKernel        = 'exponential';
-            obj.spatialKernel         = 'squaredExponential';
+                temporalKernel,meanFunction)
             
-            if nargin>1
-                % check for valid inputs
-                obj.temporalKernel = temporalKernel;
-                obj.spatialKernel  = spatialKernel;
+            switch nargin
+                case 3
+                    % check for valid inputs
+                    obj.temporalKernel = temporalKernel;
+                    obj.spatialKernel  = spatialKernel;
+                    obj.meanFunction   = meanFunction;
+                case 2
+                    % check for valid inputs
+                    obj.temporalKernel = temporalKernel;
+                    obj.spatialKernel  = spatialKernel;
+                    obj.meanFunction   = 'zeroMean';
+                otherwise
+                    obj.temporalKernel = 'exponential';
+                    obj.spatialKernel  = 'squaredExponential';
+                    obj.meanFunction   = 'zeroMean';
             end
             
         end
@@ -47,6 +57,11 @@ classdef GaussianProcess
         % set temporal kernel
         function obj = set.temporalKernel(obj,value)
             obj.temporalKernel = obj.checkKernelValidity(value);
+        end
+        
+        % set mean function
+        function obj = set.meanFunction(obj,value)
+            obj.meanFunction = obj.checkMeanFnValidity(value);
         end
         
         % set spatial length scale
@@ -78,6 +93,24 @@ classdef GaussianProcess
                     val = @ExponentialKernel;
                 case 'squaredExponential'
                     val = @SquaredExponentialKernel;
+            end
+        end
+        
+        % check mean function choice validity
+        function val = checkMeanFnValidity(obj,ipMeanFn)
+            if ismember(ipMeanFn,obj.meanFnChoices)
+                val = ipMeanFn;
+            else
+                error(['Only ',repmat('%s, ',1,numel(obj.meanFnChoices)-1),...
+                    'and %s are valid entries for kernels.',...
+                    ' You entered %s.'],obj.meanFnChoices{:},ipMeanFn);
+            end
+            % set values
+            switch ipMeanFn
+                case 'zeroMean'
+                    val = @zeroMeanFn;
+                case 'windPowerLaw'
+                    val = @windPowerLawMeanFn;
             end
         end
         
@@ -346,11 +379,11 @@ classdef GaussianProcess
     end
     
     %% external methods
-%     methods
-%         function val = generateSyntheticFlowData(obj,x,y)
-%             val = generateSyntheticFlowData(obj,x,y);
-%         end
-%     end
+    %     methods
+    %         function val = generateSyntheticFlowData(obj,x,y)
+    %             val = generateSyntheticFlowData(obj,x,y);
+    %         end
+    %     end
     
     
 end

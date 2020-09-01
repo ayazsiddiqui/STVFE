@@ -29,9 +29,9 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
     methods
         % constructor
         function obj = KalmanFilteredGaussianProcess(spatialKernel,...
-                temporalKernel,xMeasure,kfgpTimeStep)
+                temporalKernel,meanFn,xMeasure,kfgpTimeStep)
             % call superclass constructor
-            obj@GP.GaussianProcess(spatialKernel,temporalKernel);
+            obj@GP.GaussianProcess(spatialKernel,temporalKernel,meanFn);
             % set class properties
             obj.xMeasure     = xMeasure;
             obj.kfgpTimeStep = kfgpTimeStep;
