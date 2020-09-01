@@ -196,35 +196,62 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
         end
         
         % calculate MPC objective function
-        function val = calcMpcObjectiveFn(obj,sk_k,ck_k,meanElev0,uTrajectory)
+        function [val,varargout] = ...
+                calcMpcObjectiveFn(obj,sk_k,ck_k,meanElevTraject)
             % local variables
             predHorz = obj.predictionHorizon;
-            Mk = nan(1,predHorz);
-            meanElev = nan(1,predHorz);
-            aqVal = nan(1,predHorz);
+            Mk       = nan(1,predHorz);
+            aqVal    = nan(1,predHorz);
+            jExploit = nan(1,predHorz);
+            jExplore = nan(1,predHorz);
+            % calculate acquisition function at each mean elevation angle
             for ii = 1:predHorz
-                if ii == 1
-                    meanElev(ii) = meanElev0 + uTrajectory(ii);
-                else
-                    meanElev(ii) = meanElev(ii-1) + uTrajectory(ii);
-                end
                 % update current altitude
-                Mk(ii) = obj.tetherLength*sind(meanElev(ii));
+                Mk(ii) = obj.tetherLength*sind(meanElevTraject(ii));
                 % perform kalman state estimation
                 [F_t,sigF_t,skp1_kp1,ckp1_kp1] = ...
-                    kfgp.calcKalmanStateEstimates(sk_k,ck_k,Mk(ii),[]);
+                    obj.calcKalmanStateEstimates(sk_k,ck_k,Mk(ii),[]);
                 % calculate acquistion function
-                aqVal(ii) = obj.calcAquisitionFunction(meanElev(ii),F_t,sigF_t);
+                [aqVal(ii),jExploit(ii),jExplore(ii)] = ...
+                    obj.calcAquisitionFunction(meanElevTraject(ii),F_t,sigF_t);
                 % update kalman states
                 sk_k = skp1_kp1;
                 ck_k = ckp1_kp1;
-]            end
+            end
             % mpc objective function val
             val = sum(aqVal);
+            varargout{1} = jExploit;
+            varargout{2} = jExplore;
             
         end
     end
     
+    %% brute force trajectory optizimation
+    methods
+        % optimize mean elevation angle trajectory using brute force
+        function [val,varargout] = ...
+                bruteForceTrajectoryOpt(obj,sk_k,ck_k,meanElev,uAllowable,...
+                lb,ub)
+            % local variables
+            predHorz = obj.predictionHorizon;
+            % create all allowable state and control trajectories
+            [meanElevTraj,uTraj] = ...
+                makeBruteForceStateTrajectories(uAllowable,predHorz,...
+                meanElev,lb,ub);
+            % number of allowable trajectories
+            nAllowed = size(meanElevTraj,1);
+            % calculate acquistion function for each trajectory
+            mpcAqFunc = nan(nAllowed,1);
+            for ii = 1:nAllowed
+                mpcAqFunc(ii) = ...
+                    obj.calcMpcObjectiveFn(sk_k,ck_k,meanElevTraj(ii,:));
+            end
+            [~,maxIdx] = max(mpcAqFunc);
+            val = meanElevTraj(maxIdx,:);
+            varargout{1} = uTraj(maxIdx,:);
+            
+        end
+        
+    end
+    
 end
-
-

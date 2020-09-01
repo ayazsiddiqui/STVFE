@@ -1,16 +1,14 @@
-function val = makeBruteForceCombinations(ctrlIp,nSteps)
+function val = makeBruteForceControlCombinations(ctrlIp,nSteps)
 
-% function that determines every possible control sequence that can be
-% executed given a control input vector and number of steps
-
+% number of elements in control vector
 nu = numel(ctrlIp);
-
+% preallocate
 val = NaN(nu^nSteps,nSteps);
-
+% initialize
 ii = 1;
 jj = nSteps;
 kk = 1;
-
+% this weird loop that somehow works
 while jj >= 1
     while ii <= nu^nSteps
         while kk <= nu

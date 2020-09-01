@@ -460,7 +460,7 @@ classdef GPKF
             % % % dummy variables
             xMeasure = obj.p_xMeasure;
             % % % determine all possible control
-            ctrlComb = makeBruteForceCombinations(uAllowable,predHorizon);
+            ctrlComb = makeBruteForceStateTrajectories(uAllowable,predHorizon);
             % % % number of state trajectories
             nTraject = size(ctrlComb,1);
             % % % determine state trajectories, gpkf predictions,
