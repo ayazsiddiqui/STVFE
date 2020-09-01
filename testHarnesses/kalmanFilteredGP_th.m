@@ -87,7 +87,7 @@ mpckfgp.initVals = mpckfgp.initializeKFGP;
 mpckfgp.spatialCovMat = mpckfgp.makeSpatialCovarianceMatrix(altitudes);
 mpckfgp.spatialCovMatRoot = mpckfgp.calcSpatialCovMatRoot;
 
-mpckfgp.tetherLength         = 100;
+mpckfgp.tetherLength         = 150;
 
 % acquistion function parameters
 mpckfgp.exploitationConstant = 0;
@@ -173,7 +173,7 @@ for ii = 1:nSamp
         
         % use fminc to solve for best trajectory
         [bestTraj,mpcObj] = ...
-            fmincon(@(u)-mpckfgp.calcMpcObjectiveFn(skp1_kp1_mpc,ckp1_kp1_mpc,u),...
+            fmincon(@(u) -mpckfgp.calcMpcObjectiveFn(skp1_kp1_mpc,ckp1_kp1_mpc,u),...
             meanElevation*ones(predictionHorz,1),A,b,[],[],...
             lb,ub,[],options);
         % get other values
@@ -188,11 +188,11 @@ for ii = 1:nSamp
             mpckfgp.calcMpcObjectiveFn(skp1_kp1_mpc,ckp1_kp1_mpc,...
             bruteForceTraj);
         % next point
-        %         nextPoint = mpckfgp.tetherLength*sind(bestTraj(1));
-        nextPoint = mpckfgp.convertMeanElevToAlt(bruteForceTraj(1));
+        nextPoint = mpckfgp.convertMeanElevToAlt(bestTraj(1));
+%         nextPoint = mpckfgp.convertMeanElevToAlt(bruteForceTraj(1));
         disp('MPC and BF best trajectory:');
-        disp(bestTraj');
-        disp(bruteForceTraj);
+        disp(mpckfgp.convertMeanElevToAlt(bestTraj'));
+        disp(mpckfgp.convertMeanElevToAlt(bruteForceTraj));
     end
     
     
