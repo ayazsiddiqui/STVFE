@@ -39,12 +39,13 @@ if regDataAvailable
     nTs = numel(tVecData);
     ub = nan(numel(regRes),1);
     lb = nan(numel(regRes),1);
-    
+
     for ii = 1:numel(regRes)
         regRes(ii).predMean = resample(regRes(ii).predMean,tVecData);
         regRes(ii).loBound  = resample(regRes(ii).loBound,tVecData);
         regRes(ii).upBound  = resample(regRes(ii).upBound,tVecData);
         regRes(ii).dataSamp = resample(regRes(ii).dataSamp,tVecData);
+
         
         ub(ii) = max(cat(3,regRes(ii).loBound.Data,regRes(ii).upBound.Data),[],'all');
         lb(ii) = min(cat(3,regRes(ii).loBound.Data,regRes(ii).upBound.Data),[],'all');
@@ -52,6 +53,8 @@ if regDataAvailable
     end
     lb = min([lb(:);lbFlow]);
     ub = max([ub(:);ubFlow]);
+    dataAltVals  = regRes(1).dataAlts.Data(:,1);
+
     
 else
     lb = lbFlow;
@@ -88,11 +91,11 @@ if regDataAvailable
     pSampData = gobjects;
     
     for ii = 1:numel(regRes)
-        pMeanData(ii) = plot(regRes(ii).predMean.Data(:,1,1),altVals(:,1,1),'-',...
+        pMeanData(ii) = plot(regRes(ii).predMean.Data(:,1,1),dataAltVals,'-',...
             'color',colorOrder(ii,:));
-        plbData(ii) = plot(regRes(ii).loBound.Data(:,1,1),altVals(:,1,1),'--',...
+        plbData(ii) = plot(regRes(ii).loBound.Data(:,1,1),dataAltVals,'--',...
             'color',colorOrder(ii,:));
-        pubData(ii) = plot(regRes(ii).upBound.Data(:,1,1),altVals(:,1,1),'--',...
+        pubData(ii) = plot(regRes(ii).upBound.Data(:,1,1),dataAltVals,'--',...
             'color',colorOrder(ii,:));
         pSampData(ii) = plot(regRes(ii).dataSamp.Data(2,1,1),...
             regRes(ii).dataSamp.Data(1,1,1),'mo');

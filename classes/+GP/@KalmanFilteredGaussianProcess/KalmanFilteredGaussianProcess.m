@@ -144,40 +144,34 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
         function [predMean,postVar] = ...
                 calcPredMeanAndPostVar(obj,xPredict,F_t,sigF_t)
             % number of points in the discretized domain
-            xDomainNP = size(obj.xMeasure,2);
+            noXM = size(obj.xMeasure,2);
             % number of points over which we want to acquire predictions
-            xPredictNp = size(xPredict,2);
+            noXP = size(xPredict,2);
             % Regression as per section 5 of Todescato journal paper
-            % temporations kernel value at tau = 0
-            h0 = obj.temporalCovAmp;
-            % multiply the spatial covariance matrix by h0
-            Vf = h0*obj.spatialCovMat;
             % preallocate matrices
-            sigmaX   = NaN(xPredictNp,xDomainNP);
-            Vx       = NaN(xPredictNp,1);
-            predMean = NaN(xPredictNp,1);
-            postVar  = NaN(xPredictNp,1);
-            mXstar = NaN(xPredictNp,1);
-            mX = obj.meanFunction(obj.xMeasure)';
+            mXstar   = NaN(noXP,1);            
+            % pre-allocate matrices
+            kx_xstar     = NaN(noXM,noXP);
+            kxstar_xstar = NaN(noXP,1);
             % perform regression on each point in the domain
-            for ii = 1:xPredictNp
-                for jj = 1:xDomainNP
-                    sigmaX(ii,jj) = h0*obj.calcSpatialCovariance(...
+            for ii = 1:noXP
+                for jj = 1:noXM
+                    kx_xstar(jj,ii) = obj.calcSpatialCovariance(...
                         xPredict(:,ii),obj.xMeasure(:,jj));
                 end
-                Vx(ii,1) = h0*obj.calcSpatialCovariance(...
-                    xPredict(:,ii),xPredict(:,ii));
-                % % predicted mean as per Todescato Eqn. (17)
+                kxstar_xstar(ii) = obj.calcSpatialCovariance(...
+                        xPredict(:,ii),xPredict(:,ii));
                 mXstar(ii) = obj.meanFunction(xPredict(:,ii));
                 
-                predMean(ii,1) = mXstar(ii) + ...
-                    sigmaX(ii,:)*(Vf\(F_t - mX));
-                % % posterior variance as per Todescato Eqn. (18)
-                postVar(ii,:) = Vx(ii,1) - ...
-                    sigmaX(ii,:)*(Vf\(Vf - sigF_t))*...
-                    (Vf\sigmaX(ii,:)');
             end
+            % local variables to minimie matrix inverse
+            Ky = obj.spatialCovMat;
+            kInvK = kx_xstar'/Ky;
+            predMean = kInvK*F_t;
+            postVar  = kxstar_xstar - ...
+                diag(kInvK*(eye(noXM)*kx_xstar - sigF_t*kInvK'));
         end
+
         
     end
     
@@ -215,7 +209,8 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
                 Mk(ii) = obj.convertMeanElevToAlt(meanElevTraject(ii));
                 % perform kalman state estimation
                 [F_t,sigF_t,skp1_kp1,ckp1_kp1] = ...
-                    obj.calcKalmanStateEstimates(sk_k,ck_k,Mk(ii),[]);
+                    obj.calcKalmanStateEstimates(sk_k,ck_k,Mk(ii),...
+                    obj.meanFunction(Mk(ii)));
                 % calculate acquistion function
                 [aqVal(ii),jExploit(ii),jExplore(ii)] = ...
                     obj.calcAquisitionFunction(meanElevTraject(ii),F_t,sigF_t);

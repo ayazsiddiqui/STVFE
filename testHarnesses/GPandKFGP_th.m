@@ -10,12 +10,12 @@ rng(1);
 
 % altitudes
 altitudes = 0:10:100;
-kfgpTimeStep = 2;
+kfgpTimeStep = 0.25;
 
 % spatial kernel
 
 kfgp = GP.KalmanFilteredGaussianProcess('squaredExponential','exponential',...
-    'zeroMean',altitudes,kfgpTimeStep);
+    'windPowerLaw',altitudes,kfgpTimeStep);
 
 kfgp.spatialCovAmp       = 1;
 kfgp.spatialLengthScale  = 20;
@@ -29,7 +29,7 @@ kfgp.spatialCovMatRoot = kfgp.calcSpatialCovMatRoot;
 
 
 % guassian process
-gp = GP.GaussianProcess('squaredExponential','exponential','zeroMean');
+gp = GP.GaussianProcess('squaredExponential','exponential','windPowerLaw');
 
 gp.spatialCovAmp       = kfgp.spatialCovAmp;
 gp.spatialLengthScale  = kfgp.spatialLengthScale;
@@ -63,19 +63,22 @@ xSamp  = NaN(1,nSamp);
 ySamp  = NaN(nSamp,1);
 XTSamp = NaN(2,nSamp);
 
+nfinAlt = 1*numel(altitudes);
+finAlt = linspace(min(altitudes),max(altitudes),nfinAlt);
+
 % preallocate matrices for GP
-predMeansGP = NaN(nAlt,nSamp);
-postVarsGP  = NaN(nAlt,nSamp);
-stdDevGP    = NaN(nAlt,nSamp);
-upBoundGP   = NaN(nAlt,nSamp);
-loBoundGP   = NaN(nAlt,nSamp);
+predMeansGP = NaN(nfinAlt,nSamp);
+postVarsGP  = NaN(nfinAlt,nSamp);
+stdDevGP    = NaN(nfinAlt,nSamp);
+upBoundGP   = NaN(nfinAlt,nSamp);
+loBoundGP   = NaN(nfinAlt,nSamp);
 
 % preallocate matrices for KFGP
-predMeansKFGP = NaN(nAlt,nSamp);
-postVarsKFGP  = NaN(nAlt,nSamp);
-stdDevKFGP    = NaN(nAlt,nSamp);
-upBoundKFGP   = NaN(nAlt,nSamp);
-loBoundKFGP   = NaN(nAlt,nSamp);
+predMeansKFGP = NaN(nfinAlt,nSamp);
+postVarsKFGP  = NaN(nfinAlt,nSamp);
+stdDevKFGP    = NaN(nfinAlt,nSamp);
+upBoundKFGP   = NaN(nfinAlt,nSamp);
+loBoundKFGP   = NaN(nfinAlt,nSamp);
 
 % number of std deviations for bounds calculations
 numStdDev = 1;
@@ -88,7 +91,7 @@ for ii = 1:nSamp
         xSamp(ii) = altitudes(randperm(nAlt,1));
     else
         [~,maxVarIdx] = max(postVarsKFGP(:,ii-1));
-        xSamp(ii) = altitudes(maxVarIdx);
+        xSamp(ii) = finAlt(maxVarIdx);
     end
     % measure flow at xSamp(ii) at tSamp(ii)
     fData = resample(synFlow,tSamp(ii)*60).Data;
@@ -115,7 +118,7 @@ for ii = 1:nSamp
     [F_t,sigF_t,skp1_kp1,ckp1_kp1] = ...
         kfgp.calcKalmanStateEstimates(sk_k,ck_k,xSamp(ii),ySamp(ii));
     % KFGP: calculate prediction mean and posterior variance
-    [muKFGP,sigKFGP] = kfgp.calcPredMeanAndPostVar(altitudes,F_t,sigF_t);  
+    [muKFGP,sigKFGP] = kfgp.calcPredMeanAndPostVar(finAlt,F_t,sigF_t);  
     % KFGP: store them
     predMeansKFGP(:,ii) = muKFGP;
     postVarsKFGP(:,ii)  = sigKFGP;
@@ -129,7 +132,7 @@ for ii = 1:nSamp
     % GP: calculate prediction mean and posterior variance
     [muGP,sigGP] = ...
         gp.calcPredMeanAndPostVar(covMat,XTSamp(:,1:ii),ySamp(1:ii),...
-        [altitudes;tSamp(ii)*ones(size(altitudes))]);
+        [finAlt;tSamp(ii)*ones(1,nfinAlt)]);
     % GP: store them
     predMeansGP(:,ii) = muGP;
     postVarsGP(:,ii)  = sigGP;
@@ -148,12 +151,16 @@ regressionRes(1).predMean  = timeseries(predMeansKFGP,tSamp*60);
 regressionRes(1).loBound   = timeseries(loBoundKFGP,tSamp*60);
 regressionRes(1).upBound   = timeseries(upBoundKFGP,tSamp*60);
 regressionRes(1).dataSamp  = timeseries([xSamp;ySamp'],tSamp*60);
+regressionRes(1).dataAlts  = timeseries(repmat(finAlt(:),1,nSamp),tSamp*60);
+
 regressionRes(1).legend    = 'KFGP';
 
 regressionRes(2).predMean  = timeseries(predMeansGP,tSamp*60);
 regressionRes(2).loBound   = timeseries(loBoundGP,tSamp*60);
 regressionRes(2).upBound   = timeseries(upBoundGP,tSamp*60);
 regressionRes(2).dataSamp  = timeseries([xSamp;ySamp'],tSamp*60);
+regressionRes(2).dataAlts  = timeseries(repmat(finAlt(:),1,nSamp),tSamp*60);
+
 regressionRes(2).legend    = 'GP';
 
 
