@@ -31,7 +31,7 @@ kfgp.spatialCovMatRoot = kfgp.calcSpatialCovMatRoot;
 % number of altitudes
 nAlt = numel(altitudes);
 % final time for data generation in minutes
-tFinData = 60;
+tFinData = 600;
 % time step for synthetic data generation
 timeStepSynData = 1;
 % standard deviation for synthetic data generation
@@ -44,7 +44,7 @@ stdDevSynData = 0.5;
 % sampling time step
 dt = kfgp.kfgpTimeStep;
 % algorithm final time
-algFinTime = 10;
+algFinTime = 120;
 % sampling time vector
 tSamp = 0:dt:algFinTime;
 % number of samples
@@ -121,13 +121,15 @@ ub = maxElev*ones(1,predictionHorz);
 
 uAllowable = linspace(-uMax,uMax,5);
 
+jj = 1;
 
 %% do the regresson
 for ii = 1:nSamp
-    % go to xSamp
     if ii == 1
         nextPoint = altitudes(randperm(nAlt,1));
     end
+    
+    % go to xSamp
     xSamp(ii) = nextPoint;
     % measure flow at xSamp(ii) at tSamp(ii)
     fData = resample(synFlow,tSamp(ii)*60).Data;
@@ -166,27 +168,44 @@ for ii = 1:nSamp
     fsBoundsB(2,1) = meanElevation - uMax;
     b = [fsBoundsB;bstep];
     
-    if ii>1 && mod(tSamp(ii),mpckfgp.kfgpTimeStep)==0
-%         % use fminc to solve for best trajectory
-%         [bestTraj,mpcObj] = ...
-%             fmincon(@(u)-mpckfgp.calcMpcObjectiveFn(skp1_kp1,ckp1_kp1,u),...
-%             meanElevation*ones(predictionHorz,1),A,b,[],[],...
-%             lb,ub,[],options);
-%         % get other values
-%         [~,jExploit,jExplore] = ...
-%             mpckfgp.calcMpcObjectiveFn(skp1_kp1,ckp1_kp1,bestTraj);
-        % brute force
-        bruteForceTraj = ...
-            mpckfgp.bruteForceTrajectoryOpt(sk_k,ck_k,meanElevation,ySamp(ii),...
-            uAllowable,lb(1),ub(1));
-        % get other values
-        [~,jExploitBF,jExploreBF] = ...
-            mpckfgp.calcMpcObjectiveFn(sk_k,ck_k,meanElevation,ySamp(ii),...
-            bruteForceTraj);
-        % next point
-%         nextPoint = mpckfgp.tetherLength*sind(bestTraj(1));        
-        nextPoint = mpckfgp.tetherLength*sind(bruteForceTraj(1));
-        disp(tSamp(ii));
+    if mod(tSamp(ii),mpckfgp.kfgpTimeStep)==0
+        if ii == 1
+            sk_k_mpc = mpckfgp.initVals.s0;
+            ck_k_mpc = mpckfgp.initVals.sig0Mat;
+        else
+            sk_k_mpc = skp1_kp1_mpc;
+            ck_k_mpc = ckp1_kp1_mpc;
+        end
+        
+    % KFGP: calculate kalman states
+    [F_t_mpc,sigF_t_mpc,skp1_kp1_mpc,ckp1_kp1_mpc] = ...
+        mpckfgp.calcKalmanStateEstimates(sk_k,ck_k,xSamp(ii),ySamp(ii));
+    % KFGP: calculate prediction mean and posterior variance
+    [muKFGP_mpc,sigKFGP_mpc] = mpckfgp.calcPredMeanAndPostVar(altitudes,F_t_mpc,sigF_t_mpc);
+    
+    F_t_comp = F_t_mpc - F_t;
+    sigF_t_comp = sigF_t_mpc - sigF_t;
+    sk_k_comp = sk_k_mpc - sk_k;
+    ck_k_comp = ck_k_mpc - ck_k;
+    skp1_kp1_comp = skp1_kp1_mpc - skp1_kp1;
+    ckp1_kp1_comp = ckp1_kp1_mpc - ckp1_kp1;
+    muKFGP_comp = muKFGP_mpc - muKFGP;
+    sigKFGP_comp = sigKFGP_mpc - sigKFGP;
+    
+    % KFGP: store them
+    predMeansKFGP_MPC(:,jj) = muKFGP_mpc;
+    postVarsKFGP_MPC(:,jj)  = sigKFGP_mpc;
+    % KFGP: calculate bounds
+    stdDevKFGP_MPC(:,jj) = postVarsKFGP_MPC(:,jj).^0.5;
+    % KFGP: upper bounds = mean + x*(standard deviation)
+    upBoundKFGP_MPC(:,jj) = predMeansKFGP_MPC(:,jj) + numStdDev*stdDevKFGP_MPC(:,jj);
+    % KFGP: lower bounds = mean - x*(standard deviation)
+    loBoundKFGP_MPC(:,jj) = predMeansKFGP_MPC(:,jj) - numStdDev*stdDevKFGP_MPC(:,jj);
+
+    tMPC(jj) = tSamp(ii);
+    jj = jj+1;
+    nextPoint = altitudes(randperm(nAlt,1));
+
     end
     
     
@@ -200,9 +219,15 @@ regressionRes(1).upBound   = timeseries(upBoundKFGP,tSamp*60);
 regressionRes(1).dataSamp  = timeseries([xSamp;ySamp'],tSamp*60);
 regressionRes(1).legend    = 'KFGP';
 
+regressionRes(2).predMean  = timeseries(predMeansKFGP_MPC,tMPC*60);
+regressionRes(2).loBound   = timeseries(loBoundKFGP_MPC,tMPC*60);
+regressionRes(2).upBound   = timeseries(upBoundKFGP_MPC,tMPC*60);
+regressionRes(2).dataSamp  = timeseries([xSamp;ySamp'],tSamp*60);
+regressionRes(2).legend    = 'KFGP-MPC';
+
 
 %% plot the data
-F = animatedPlot(synFlow,synAlt,'plotTimeStep',0.25,...
-    'regressionResults',regressionRes,'waitforbutton',false);
+F = animatedPlot(synFlow,synAlt,'plotTimeStep',0.05,...
+    'regressionResults',regressionRes,'waitforbutton',true);
 
 

@@ -181,13 +181,13 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
         % calculate aquistion function
         function [val,varargout] = calcAquisitionFunction(obj,meanElevation,F_t,sigF_t)
             % convert elevation angle to altitude
-            xPredict = obj.tetherLength*sind(meanElevation);
+            xPredict = obj.convertMeanElevToAlt(meanElevation);
             % calculate prediction mean and posterior variance
             [flowPred,flowVar] = obj.calcPredMeanAndPostVar(xPredict,F_t,sigF_t);
             % exploitation incentive
             jExploit = obj.exploitationConstant*(flowPred.*cosd(meanElevation)).^3;
             % exploration incentive
-            jExplore = obj.explorationConstant*flowVar;
+            jExplore = obj.explorationConstant*real(flowVar.^.5);
             % sum
             val = jExploit + jExplore;
             % other outputs
@@ -197,22 +197,31 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
         
         % calculate MPC objective function
         function [val,varargout] = ...
-                calcMpcObjectiveFn(obj,sk_k,ck_k,meanElevTraject)
+                calcMpcObjectiveFn(obj,sk_k,ck_k,meanElev0,y,meanElevTraject)
+            % Mk0
+            Mk0 = obj.convertMeanElevToAlt(meanElev0);
             % local variables
             predHorz = obj.predictionHorizon;
             Mk       = nan(1,predHorz);
-            aqVal    = nan(1,predHorz);
-            jExploit = nan(1,predHorz);
-            jExplore = nan(1,predHorz);
+            aqVal    = nan(1,predHorz+1);
+            jExploit = nan(1,predHorz+1);
+            jExplore = nan(1,predHorz+1);
+            % calc initial acquisition function
+            [F_t,sigF_t,skp1_kp1,ckp1_kp1] = ...
+                obj.calcKalmanStateEstimates(sk_k,ck_k,Mk0,y);
+            [aqVal(1),jExploit(1),jExplore(1)] = ...
+                obj.calcAquisitionFunction(meanElev0,F_t,sigF_t);
             % calculate acquisition function at each mean elevation angle
+            sk_k = skp1_kp1;
+            ck_k = ckp1_kp1;
             for ii = 1:predHorz
                 % update current altitude
-                Mk(ii) = obj.tetherLength*sind(meanElevTraject(ii));
+                Mk(ii) = obj.convertMeanElevToAlt(meanElevTraject(ii));
                 % perform kalman state estimation
                 [F_t,sigF_t,skp1_kp1,ckp1_kp1] = ...
                     obj.calcKalmanStateEstimates(sk_k,ck_k,Mk(ii),[]);
                 % calculate acquistion function
-                [aqVal(ii),jExploit(ii),jExplore(ii)] = ...
+                [aqVal(ii+1),jExploit(ii+1),jExplore(ii+1)] = ...
                     obj.calcAquisitionFunction(meanElevTraject(ii),F_t,sigF_t);
                 % update kalman states
                 sk_k = skp1_kp1;
@@ -224,13 +233,17 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
             varargout{2} = jExplore;
             
         end
+        
+        function val = convertMeanElevToAlt(obj,meanElevation)
+            val = obj.tetherLength*sind(meanElevation);
+        end
     end
     
     %% brute force trajectory optizimation
     methods
         % optimize mean elevation angle trajectory using brute force
         function [val,varargout] = ...
-                bruteForceTrajectoryOpt(obj,sk_k,ck_k,meanElev,uAllowable,...
+                bruteForceTrajectoryOpt(obj,sk_k,ck_k,meanElev,y,uAllowable,...
                 lb,ub)
             % local variables
             predHorz = obj.predictionHorizon;
@@ -242,11 +255,13 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
             nAllowed = size(meanElevTraj,1);
             % calculate acquistion function for each trajectory
             mpcAqFunc = nan(nAllowed,1);
+            
             for ii = 1:nAllowed
                 mpcAqFunc(ii) = ...
-                    obj.calcMpcObjectiveFn(sk_k,ck_k,meanElevTraj(ii,:));
+                    obj.calcMpcObjectiveFn(sk_k,ck_k,meanElev,y,meanElevTraj(ii,:));
             end
             [~,maxIdx] = max(mpcAqFunc);
+            [B,I] = sort(mpcAqFunc,'descend');
             val = meanElevTraj(maxIdx,:);
             varargout{1} = uTraj(maxIdx,:);
             
