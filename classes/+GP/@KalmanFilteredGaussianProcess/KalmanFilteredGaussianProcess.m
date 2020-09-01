@@ -196,7 +196,7 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
         
         % calculate MPC objective function
         function [val,varargout] = ...
-                calcMpcObjectiveFn(obj,sk_k,ck_k,meanElevTraject)
+                calcMpcObjectiveFn(obj,F_t,sigF_t,skp1_kp1,ckp1_kp1,meanElevTraject)
             % local variables
             predHorz = obj.predictionHorizon;
             Mk       = nan(1,predHorz);
@@ -205,18 +205,19 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
             jExplore = nan(1,predHorz);
             % calculate acquisition function at each mean elevation angle
             for ii = 1:predHorz
-                % update current altitude
-                Mk(ii) = obj.convertMeanElevToAlt(meanElevTraject(ii));
-                % perform kalman state estimation
-                [F_t,sigF_t,skp1_kp1,ckp1_kp1] = ...
-                    obj.calcKalmanStateEstimates(sk_k,ck_k,Mk(ii),...
-                    obj.meanFunction(Mk(ii)));
                 % calculate acquistion function
                 [aqVal(ii),jExploit(ii),jExplore(ii)] = ...
                     obj.calcAquisitionFunction(meanElevTraject(ii),F_t,sigF_t);
                 % update kalman states
                 sk_k = skp1_kp1;
                 ck_k = ckp1_kp1;
+                % update current altitude
+                Mk(ii) = obj.convertMeanElevToAlt(meanElevTraject(ii));
+                % perform kalman state estimation
+                [F_t,sigF_t,skp1_kp1,ckp1_kp1] = ...
+                    obj.calcKalmanStateEstimates(sk_k,ck_k,Mk(ii),...
+                    obj.meanFunction(Mk(ii)));
+
             end
             % mpc objective function val
             val = sum(aqVal);
@@ -235,8 +236,8 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
     methods
         % optimize mean elevation angle trajectory using brute force
         function [val,varargout] = ...
-                bruteForceTrajectoryOpt(obj,sk_k,ck_k,meanElev,uAllowable,...
-                lb,ub)
+                bruteForceTrajectoryOpt(obj,F_t,sigF_t,skp1_kp1,ckp1_kp1,...
+                meanElev,uAllowable,lb,ub)
             % local variables
             predHorz = obj.predictionHorizon;
             % create all allowable state and control trajectories
@@ -249,7 +250,8 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
             mpcAqFunc = nan(nAllowed,1);
             for ii = 1:nAllowed
                 mpcAqFunc(ii) = ...
-                    obj.calcMpcObjectiveFn(sk_k,ck_k,meanElevTraj(ii,:));
+                    obj.calcMpcObjectiveFn(F_t,sigF_t,skp1_kp1,ckp1_kp1,...
+                    meanElevTraj(ii,:));
             end
             [~,maxIdx] = max(mpcAqFunc);
             [B,I] = sort(mpcAqFunc,'descend');

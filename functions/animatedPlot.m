@@ -6,7 +6,6 @@ addParameter(pp,'plotTimeStep',1,@isnumeric);
 addParameter(pp,'regressionResults',struct);
 addParameter(pp,'waitForButton',true,@islogical);
 
-
 parse(pp,varargin{:});
 
 % time vec
@@ -46,7 +45,6 @@ if regDataAvailable
         regRes(ii).upBound  = resample(regRes(ii).upBound,tVecData);
         regRes(ii).dataSamp = resample(regRes(ii).dataSamp,tVecData);
 
-        
         ub(ii) = max(cat(3,regRes(ii).loBound.Data,regRes(ii).upBound.Data),[],'all');
         lb(ii) = min(cat(3,regRes(ii).loBound.Data,regRes(ii).upBound.Data),[],'all');
         
