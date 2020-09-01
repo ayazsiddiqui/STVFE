@@ -10,7 +10,7 @@ rng(1);
 
 % altitudes
 altitudes = 0:10:100;
-kfgpTimeStep = 0.05;
+kfgpTimeStep = 0.25;
 
 % spatial kernel
 
@@ -29,7 +29,7 @@ kfgp.spatialCovMatRoot = kfgp.calcSpatialCovMatRoot;
 
 
 % guassian process
-gp = GP.GaussianProcess('squaredExponential','exponential','zeroMean');
+gp = GP.GaussianProcess('squaredExponential','exponential','windPowerLaw');
 
 gp.spatialCovAmp       = kfgp.spatialCovAmp;
 gp.spatialLengthScale  = kfgp.spatialLengthScale;
@@ -41,7 +41,7 @@ gp.noiseVariance       = kfgp.noiseVariance;
 % number of altitudes
 nAlt = numel(altitudes);
 % final time for data generation in minutes
-tFinData = 60;
+tFinData = 120;
 % time step for synthetic data generation
 timeStepSynData = 1;
 % standard deviation for synthetic data generation
@@ -51,12 +51,10 @@ stdDevSynData = 0.5;
     'timeStep',timeStepSynData);
 
 %% regression using traditional GP
-% sampling time step
-dt = kfgp.kfgpTimeStep;
 % algorithm final time
-algFinTime = 10;
+algFinTime = 30;
 % sampling time vector
-tSamp = 0:dt:algFinTime;
+tSamp = 0:kfgp.kfgpTimeStep:algFinTime;
 % number of samples
 nSamp = numel(tSamp);
 
@@ -89,7 +87,7 @@ for ii = 1:nSamp
     if ii == 1
         xSamp(ii) = altitudes(randperm(nAlt,1));
     else
-        [~,maxVarIdx] = max(postVarsGP(:,ii-1));
+        [~,maxVarIdx] = max(postVarsKFGP(:,ii-1));
         xSamp(ii) = altitudes(maxVarIdx);
     end
     % measure flow at xSamp(ii) at tSamp(ii)
@@ -127,8 +125,7 @@ for ii = 1:nSamp
     upBoundKFGP(:,ii) = predMeansKFGP(:,ii) + numStdDev*stdDevKFGP(:,ii);
     % KFGP: lower bounds = mean - x*(standard deviation)
     loBoundKFGP(:,ii) = predMeansKFGP(:,ii) - numStdDev*stdDevKFGP(:,ii);
-    
-    
+        
     % GP: calculate prediction mean and posterior variance
     [muGP,sigGP] = ...
         gp.calcPredMeanAndPostVar(covMat,XTSamp(:,1:ii),ySamp(1:ii),...

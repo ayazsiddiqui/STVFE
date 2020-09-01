@@ -8,7 +8,7 @@ cd(fileparts(mfilename('fullpath')));
 %% initialize GP
 rng(1);
 
-gp = GP.GaussianProcess('squaredExponential','exponential');
+gp = GP.GaussianProcess('squaredExponential','exponential','windPowerLaw');
 
 gp.spatialCovAmp       = 1;
 gp.spatialLengthScale  = 30;
@@ -25,7 +25,7 @@ tFinData = 30;
 % time step for synthetic data generation
 timeStepSynData = 1;
 % standard deviation for synthetic data generation
-stdDevSynData = 0.5;
+stdDevSynData = 2;
 % get the time series object
 [synFlow,synAlt] = gp.generateSyntheticFlowData(altitudes,tFinData,stdDevSynData,...
     'timeStep',timeStepSynData);

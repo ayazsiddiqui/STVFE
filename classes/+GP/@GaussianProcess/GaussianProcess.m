@@ -339,7 +339,9 @@ classdef GaussianProcess
             Ky = covMat + obj.noiseVariance*eye(nTrainPoints);
             kInvK = kx_xstar'/Ky;
             % prediction mean
-            predMean = kInvK*y;
+            mXstar = obj.meanFunction(xStar(1:end-1,:)');
+            mX = obj.meanFunction(XT(1:end-1,:)');
+            predMean = mXstar + kInvK*(y-mX);
             % posterior variance
             postVar = kxstar_xstar - diag(kInvK*kx_xstar);
             
