@@ -15,7 +15,7 @@ kfgpTimeStep = 0.05;
 % spatial kernel
 
 kfgp = GP.KalmanFilteredGaussianProcess('squaredExponential','exponential',...
-    'zeroMean',altitudes,kfgpTimeStep);
+    'windPowerLaw',altitudes,kfgpTimeStep);
 
 kfgp.spatialCovAmp       = 1;
 kfgp.spatialLengthScale  = 20;
@@ -35,7 +35,7 @@ tFinData = 300;
 % time step for synthetic data generation
 timeStepSynData = 0.5;
 % standard deviation for synthetic data generation
-stdDevSynData = 4;
+stdDevSynData = 0.5;
 % get the time series object
 [synFlow,synAlt] = kfgp.generateSyntheticFlowData(altitudes,tFinData,stdDevSynData,...
     'timeStep',timeStepSynData);
@@ -68,12 +68,12 @@ numStdDev = 1;
 % mpc time step
 mpckfgpTimeStep = 0.5;
 % mpc prediction horizon
-predictionHorz  = 4;
+predictionHorz  = 6;
 % fmincon options
 options = optimoptions('fmincon','algorithm','sqp','display','off');
 % make new KFGP to maintain MPC calculations
 mpckfgp = GP.KalmanFilteredGaussianProcess('squaredExponential','exponential',...
-    'zeroMean',altitudes,mpckfgpTimeStep);
+    'windPowerLaw',altitudes,mpckfgpTimeStep);
 
 mpckfgp.spatialCovAmp       = kfgp.spatialCovAmp;
 mpckfgp.spatialLengthScale  = kfgp.spatialLengthScale;
@@ -88,12 +88,12 @@ mpckfgp.spatialCovMatRoot = mpckfgp.calcSpatialCovMatRoot;
 mpckfgp.tetherLength         = 200;
 
 % acquistion function parameters
-mpckfgp.exploitationConstant = 0;
+mpckfgp.exploitationConstant = 1;
 mpckfgp.explorationConstant  = 2;
 mpckfgp.predictionHorizon    = predictionHorz;
 
 % max mean elevation angle step size
-duMax = 10;
+duMax = 5;
 Astep = zeros(predictionHorz-1,predictionHorz);
 bstep = duMax*ones(2*(predictionHorz-1),1);
 for ii = 1:predictionHorz-1
@@ -112,29 +112,36 @@ fsBoundsA(1,1) = 1;
 fsBoundsA(2,1) = -1;
 A = [fsBoundsA;Astep];
 % upper and lower bounds
-minElev = asin(altitudes(1)/mpckfgp.tetherLength)*180/pi;
+minElev = asin(altitudes(2)/mpckfgp.tetherLength)*180/pi;
 lb = minElev*ones(1,predictionHorz);
 maxElev = asin(max(altitudes)/mpckfgp.tetherLength)*180/pi;
 ub = maxElev*ones(1,predictionHorz);
 
 uAllowable = linspace(-duMax,duMax,5);
 
-% number of time mpc will trigger
+% number of times mpc will trigger
 nMPC = floor(tSamp(end)/mpckfgpTimeStep);
+tMPC     = nan(1,nMPC);
 jObjFmin = nan(1,nMPC);
 jObjBF   = nan(1,nMPC);
-zPosFmin = nan(predictionHorz,nMPC);
-zPosBF   = nan(predictionHorz,nMPC);
-xPosFmin = nan(predictionHorz,nMPC);
-xPosBF   = nan(predictionHorz,nMPC);
 uTrajFmin = nan(predictionHorz,nMPC);
 uTrajBF = nan(predictionHorz,nMPC);
 
-tMPC     = nan(1,nMPC);
+% omniscient controller preallocation
+fValOmni     = nan(1,nSamp);
+omniElev     = nan(1,nSamp);
+elevsAtAllAlts = asin(altitudes/mpckfgp.tetherLength)*180/pi;
+cosElevAtAllAlts = cosd(elevsAtAllAlts);
+% baseline contoller
+baselineElev = 15;
+baselineAlt  = mpckfgp.tetherLength*sind(baselineElev);
+fValBaseline = nan(1,nSamp);
+% KFGP control
+fValKFGP     = nan(1,nSamp);
+KFGPElev     = nan(1,nSamp);
 
+% mpc counter
 jj = 1;
-
-
 %% do the regresson
 for ii = 1:nSamp
     % go to xSamp
@@ -146,6 +153,15 @@ for ii = 1:nSamp
     fData = resample(synFlow,tSamp(ii)*60).Data;
     hData = resample(synAlt,tSamp(ii)*60).Data;
     ySamp(ii) = interp1(hData,fData,xSamp(ii));
+    % calculate pseudo power
+    % omniscient, uncontrained controller
+    [fValOmni(ii),omniIdx] = max((fData.*cosElevAtAllAlts(:)).^3);
+    omniElev(ii) = elevsAtAllAlts(omniIdx);
+    % base line
+    fValBaseline(ii) = (interp1(hData,fData,baselineAlt)*cosd(baselineElev))^3;
+%     % KFGP
+    KFGPElev(ii)  = asin(xSamp(ii)/mpckfgp.tetherLength)*180/pi;
+    fValKFGP(ii) = (ySamp(ii)*cosd(KFGPElev(ii)))^3;
     % augment altitude and height in XTsamp
     XTSamp(:,ii) = [xSamp(ii);tSamp(ii)];
     % recursion
@@ -191,20 +207,16 @@ for ii = 1:nSamp
             F_t_mpc,sigF_t_mpc,skp1_kp1_mpc,ckp1_kp1_mpc...
             ,u),meanElevation*ones(predictionHorz,1),A,b,[],[]...
             ,lb,ub,[],options);
+        uTrajFmin(:,jj) = mpckfgp.calcDelevTraj(meanElevation,bestTraj);
         % get other values
         [jObjFmin(jj),jExploitFmin,jExploreFmin] = ...
             mpckfgp.calcMpcObjectiveFn(...
             F_t_mpc,sigF_t_mpc,skp1_kp1_mpc,ckp1_kp1_mpc,...
             bestTraj);
-        zPosFmin(:,jj) = mpckfgp.convertMeanElevToAlt(bestTraj(:));
-        xPosFmin(:,jj) = cosd(bestTraj(:))*mpckfgp.tetherLength;
-        uTrajFmin(:,jj) = mpckfgp.calcDelevTraj(meanElevation,bestTraj);
         % brute force
         bruteForceTraj = mpckfgp.bruteForceTrajectoryOpt(...
             F_t_mpc,sigF_t_mpc,skp1_kp1_mpc,ckp1_kp1_mpc,...
             meanElevation,uAllowable,lb(1),ub(1));
-        zPosBF(:,jj) = mpckfgp.convertMeanElevToAlt(bruteForceTraj(:));
-        xPosBF(:,jj) = cosd(bruteForceTraj(:))*mpckfgp.tetherLength;
         uTrajBF(:,jj) = mpckfgp.calcDelevTraj(meanElevation,bruteForceTraj);
         % get other values
         [jObjBF(jj),jExploitBF,jExploreBF] = ...
@@ -212,8 +224,8 @@ for ii = 1:nSamp
             F_t_mpc,sigF_t_mpc,skp1_kp1_mpc,ckp1_kp1_mpc,...
             bruteForceTraj);
         % next point
-        %         nextPoint = mpckfgp.convertMeanElevToAlt(bestTraj(1));
-        nextPoint = mpckfgp.convertMeanElevToAlt(bruteForceTraj(1));
+        nextPoint = mpckfgp.convertMeanElevToAlt(bestTraj(1));
+%         nextPoint = mpckfgp.convertMeanElevToAlt(bruteForceTraj(1));
         disp(['FMINCON :',num2str(mpckfgp.convertMeanElevToAlt(bestTraj'),'%.3f ')]);
         disp(['BF      :',num2str(mpckfgp.convertMeanElevToAlt(bruteForceTraj),'%.3f ')]);
         fprintf('\n');
@@ -223,6 +235,7 @@ for ii = 1:nSamp
     
 end
 
+
 %% convert results to time series and store in strcut
 regressionRes(1).predMean  = timeseries(predMeansKFGP,tSamp*60);
 regressionRes(1).loBound   = timeseries(loBoundKFGP,tSamp*60);
@@ -231,9 +244,10 @@ regressionRes(1).dataSamp  = timeseries([xSamp;ySamp'],tSamp*60);
 regressionRes(1).dataAlts  = synAlt;
 regressionRes(1).legend    = 'KFGP';
 
-optimRes(1).Ztrajectory = timeseries(zPosBF,tMPC*60);
-optimRes(1).Xtrajectory = timeseries(xPosBF,tMPC*60);
+meanVals = [mean(fValOmni) mean(fValBaseline) mean(fValKFGP)];
 
+fName = ['results\KFGPres ',strrep(datestr(datetime),':','-'),'.mat'];
+save(fName);
 
 %% plot the data
 % look at objective function values at each step of MPC
@@ -244,6 +258,32 @@ plot(1:nMPC,jObjFmin,'-o')
 legend('BF','FMINCON')
 xlabel('MPC step');
 ylabel('J')
+
+% fval plots
+fvalPlot = gobjects;
+legendStrs = {'Omniscient unconstrained','Baseline','KFGP constrained'};
+
+figure
+fvalPlot(1) = plot(0:nSamp-1,fValOmni,'linewidth',1);
+grid on;hold on
+fvalPlot(2) = plot(0:nSamp-1,fValBaseline,'linewidth',1);
+fvalPlot(3) = plot(0:nSamp-1,fValKFGP,'linewidth',1);
+legend(fvalPlot(1:3),legendStrs);
+xlabel('Time step');
+ylabel('$(v_{f} cos(\phi))^3$')
+title(sprintf('MPC triggered every %d steps',mpckfgpTimeStep/kfgpTimeStep));
+
+
+figure
+elevPlots = gobjects;
+elevPlots(1) = stairs(0:nSamp-1,omniElev,'linewidth',1);
+grid on;hold on
+elevPlots(2) = plot([0 nSamp-1],baselineElev*[1 1],'linewidth',1);
+elevPlots(3) = stairs(0:nSamp-1,KFGPElev,'linewidth',1);
+legend(elevPlots(1:3),legendStrs);
+xlabel('Time step');
+ylabel('$(v_{f} cos(\phi))^3$')
+title(sprintf('MPC triggered every %d steps',mpckfgpTimeStep/kfgpTimeStep));
 
 %% animation
 figure

@@ -4,7 +4,6 @@ function val = animatedPlot(flowData,altData,varargin)
 pp = inputParser;
 addParameter(pp,'plotTimeStep',1,@isnumeric);
 addParameter(pp,'regressionResults',struct);
-addParameter(pp,'optimizationResults',struct);
 addParameter(pp,'waitForButton',true,@islogical);
 
 parse(pp,varargin{:});
@@ -31,7 +30,6 @@ nTs = numel(tVec);
 
 % regression data availabe
 regDataAvailable = ~any(ismember(pp.UsingDefaults,{'regressionResults'}));
-optDataAvailable = ~any(ismember(pp.UsingDefaults,{'optimizationResults'}));
 
 if regDataAvailable
     regRes = pp.Results.regressionResults;
@@ -54,15 +52,6 @@ if regDataAvailable
     lb = min([lb(:);lbFlow]);
     ub = max([ub(:);ubFlow]);
     dataAltVals  = regRes(1).dataAlts.Data(:,1);
-    
-    if optDataAvailable
-        optRes = pp.Results.optimizationResults;
-        
-        for kk = 1:numel(optRes)
-            optRes(kk).Ztrajectory = resample(optRes(kk).Ztrajectory,tVecData);
-            optRes(kk).Xtrajectory = resample(optRes(kk).Xtrajectory,tVecData);
-        end
-    end
     
 else
     lb = lbFlow;
@@ -110,27 +99,7 @@ if regDataAvailable
         pSampData(ii) = plot(regRes(ii).dataSamp.Data(2,1,1),...
             regRes(ii).dataSamp.Data(1,1,1),'mo');
     end
-        legend([plotFlowObj;pMeanData(:)],[{'Flow'},{regRes(:).legend}]);
-        
-    if optDataAvailable
-        ax1_pos = axisObj.Position; % position of first axes
-        ax2 = axes('Position',ax1_pos,...
-            'XAxisLocation','top',...
-            'Color','none');
-        ax2.YLim = axisObj.YLim;
-        ax2.YTick = [];
-        
-        posPlot = gobjects;
-        maxX = nan(numel(optRes),1);
-        for kk = 1:numel(optRes)
-            posPlot(kk) = line([0 optRes(kk).Xtrajectory.Data(1,1,1)]...
-                ,[0 optRes(kk).Ztrajectory.Data(1,1,1)],...
-                'Parent',ax2,'Color','g');
-            maxX(kk) = max(optRes(kk).Xtrajectory.Data,[],'all');
-        end
-        ax2.XLim = [0 max(maxX)];
-        
-    end
+    legend([plotFlowObj;pMeanData(:)],[{'Flow'},{regRes(:).legend}]);
     
 end
 
@@ -152,14 +121,6 @@ for ii = 2:nTs
             pSampData(jj).YData = regRes(jj).dataSamp.Data(1,1,ii);
             
         end
-        
-        if optDataAvailable
-           for kk = 1:numel(optRes)
-               posPlot(kk).XData = [0 optRes(kk).Xtrajectory.Data(1,1,ii)];
-               posPlot(kk).YData = [0 optRes(kk).Ztrajectory.Data(1,1,ii)];
-           end
-        end
-        
     end
     
     title(sprintf('Time = %.2f min',tVec(ii)/60));
