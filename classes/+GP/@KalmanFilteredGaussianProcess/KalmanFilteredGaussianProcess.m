@@ -230,6 +230,12 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
         function val = convertMeanElevToAlt(obj,meanElevation)
             val = obj.tetherLength*sind(meanElevation);
         end
+        
+        % calculate dMeanElev given trajectory
+        function val = calcDelevTraj(~,e0,eTraj)
+            eTraj = eTraj(:);
+            val = eTraj - [e0;eTraj(1:end-1)];
+        end
     end
     
     %% brute force trajectory optizimation

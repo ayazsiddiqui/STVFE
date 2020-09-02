@@ -117,12 +117,20 @@ lb = minElev*ones(1,predictionHorz);
 maxElev = asin(max(altitudes)/mpckfgp.tetherLength)*180/pi;
 ub = maxElev*ones(1,predictionHorz);
 
-uAllowable = linspace(-duMax,duMax,11);
+uAllowable = linspace(-duMax,duMax,5);
 
 % number of time mpc will trigger
 nMPC = floor(tSamp(end)/mpckfgpTimeStep);
-jObjFmin = nan(nMPC,1);
-jObjBF   = nan(nMPC,1);
+jObjFmin = nan(1,nMPC);
+jObjBF   = nan(1,nMPC);
+zPosFmin = nan(predictionHorz,nMPC);
+zPosBF   = nan(predictionHorz,nMPC);
+xPosFmin = nan(predictionHorz,nMPC);
+xPosBF   = nan(predictionHorz,nMPC);
+uTrajFmin = nan(predictionHorz,nMPC);
+uTrajBF = nan(predictionHorz,nMPC);
+
+tMPC     = nan(1,nMPC);
 
 jj = 1;
 
@@ -172,6 +180,7 @@ for ii = 1:nSamp
     b = [fsBoundsB;bstep];
     
     if ii>1 && mod(tSamp(ii),mpckfgp.kfgpTimeStep)==0
+        tMPC(jj) = tSamp(ii);
         % mpc kalman estimate
         [F_t_mpc,sigF_t_mpc,skp1_kp1_mpc,ckp1_kp1_mpc] = ...
             mpckfgp.calcKalmanStateEstimates(sk_k,ck_k,xSamp(ii),ySamp(ii));
@@ -187,19 +196,24 @@ for ii = 1:nSamp
             mpckfgp.calcMpcObjectiveFn(...
             F_t_mpc,sigF_t_mpc,skp1_kp1_mpc,ckp1_kp1_mpc,...
             bestTraj);
-        
+        zPosFmin(:,jj) = mpckfgp.convertMeanElevToAlt(bestTraj(:));
+        xPosFmin(:,jj) = cosd(bestTraj(:))*mpckfgp.tetherLength;
+        uTrajFmin(:,jj) = mpckfgp.calcDelevTraj(meanElevation,bestTraj);
         % brute force
         bruteForceTraj = mpckfgp.bruteForceTrajectoryOpt(...
             F_t_mpc,sigF_t_mpc,skp1_kp1_mpc,ckp1_kp1_mpc,...
             meanElevation,uAllowable,lb(1),ub(1));
+        zPosBF(:,jj) = mpckfgp.convertMeanElevToAlt(bruteForceTraj(:));
+        xPosBF(:,jj) = cosd(bruteForceTraj(:))*mpckfgp.tetherLength;
+        uTrajBF(:,jj) = mpckfgp.calcDelevTraj(meanElevation,bruteForceTraj);
         % get other values
         [jObjBF(jj),jExploitBF,jExploreBF] = ...
             mpckfgp.calcMpcObjectiveFn(...
             F_t_mpc,sigF_t_mpc,skp1_kp1_mpc,ckp1_kp1_mpc,...
             bruteForceTraj);
         % next point
-        nextPoint = mpckfgp.convertMeanElevToAlt(bestTraj(1));
-        %         nextPoint = mpckfgp.convertMeanElevToAlt(bruteForceTraj(1));
+        %         nextPoint = mpckfgp.convertMeanElevToAlt(bestTraj(1));
+        nextPoint = mpckfgp.convertMeanElevToAlt(bruteForceTraj(1));
         disp(['FMINCON :',num2str(mpckfgp.convertMeanElevToAlt(bestTraj'),'%.3f ')]);
         disp(['BF      :',num2str(mpckfgp.convertMeanElevToAlt(bruteForceTraj),'%.3f ')]);
         fprintf('\n');
@@ -217,6 +231,9 @@ regressionRes(1).dataSamp  = timeseries([xSamp;ySamp'],tSamp*60);
 regressionRes(1).dataAlts  = synAlt;
 regressionRes(1).legend    = 'KFGP';
 
+optimRes(1).Ztrajectory = timeseries(zPosBF,tMPC*60);
+optimRes(1).Xtrajectory = timeseries(xPosBF,tMPC*60);
+
 
 %% plot the data
 % look at objective function values at each step of MPC
@@ -231,6 +248,7 @@ ylabel('J')
 %% animation
 figure
 F = animatedPlot(synFlow,synAlt,'plotTimeStep',0.25,...
-    'regressionResults',regressionRes,'waitforbutton',true);
+    'regressionResults',regressionRes...
+    ,'waitforbutton',true);
 
 
