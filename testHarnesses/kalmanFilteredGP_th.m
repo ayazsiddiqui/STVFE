@@ -89,7 +89,7 @@ mpckfgp.tetherLength         = 200;
 
 % acquistion function parameters
 mpckfgp.exploitationConstant = 1;
-mpckfgp.explorationConstant  = 2;
+mpckfgp.explorationConstant  = 250;
 mpckfgp.predictionHorizon    = predictionHorz;
 
 % max mean elevation angle step size
@@ -123,8 +123,13 @@ uAllowable = linspace(-duMax,duMax,5);
 nMPC = floor(tSamp(end)/mpckfgpTimeStep);
 tMPC     = nan(1,nMPC);
 jObjFmin = nan(1,nMPC);
-jObjBF   = nan(1,nMPC);
+jExploitFmin = nan(1,nMPC);
+jExploreFmin = nan(1,nMPC);
 uTrajFmin = nan(predictionHorz,nMPC);
+
+jObjBF   = nan(1,nMPC);
+jExploitBF = nan(1,nMPC);
+jExploreBF = nan(1,nMPC);
 uTrajBF = nan(predictionHorz,nMPC);
 
 % omniscient controller preallocation
@@ -209,20 +214,26 @@ for ii = 1:nSamp
             ,lb,ub,[],options);
         uTrajFmin(:,jj) = mpckfgp.calcDelevTraj(meanElevation,bestTraj);
         % get other values
-        [jObjFmin(jj),jExploitFmin,jExploreFmin] = ...
+        [jObjFmin(jj),jExptFmin,jExpreFmin] = ...
             mpckfgp.calcMpcObjectiveFn(...
             F_t_mpc,sigF_t_mpc,skp1_kp1_mpc,ckp1_kp1_mpc,...
             bestTraj);
+        jExploitFmin(jj) = sum(jExptFmin);
+        jExploreFmin(jj) = sum(jExpreFmin);
+        
         % brute force
         bruteForceTraj = mpckfgp.bruteForceTrajectoryOpt(...
             F_t_mpc,sigF_t_mpc,skp1_kp1_mpc,ckp1_kp1_mpc,...
             meanElevation,uAllowable,lb(1),ub(1));
         uTrajBF(:,jj) = mpckfgp.calcDelevTraj(meanElevation,bruteForceTraj);
         % get other values
-        [jObjBF(jj),jExploitBF,jExploreBF] = ...
+        [jObjBF(jj),jExptBF,jExprBF] = ...
             mpckfgp.calcMpcObjectiveFn(...
             F_t_mpc,sigF_t_mpc,skp1_kp1_mpc,ckp1_kp1_mpc,...
             bruteForceTraj);
+        jExploitBF(jj) = sum(jExptBF);
+        jExploreBF(jj) = sum(jExprBF);
+
         % next point
         nextPoint = mpckfgp.convertMeanElevToAlt(bestTraj(1));
 %         nextPoint = mpckfgp.convertMeanElevToAlt(bruteForceTraj(1));
@@ -252,18 +263,45 @@ save(fName);
 %% plot the data
 % look at objective function values at each step of MPC
 figure
+
+spOpt = gobjects;
+spOpt(1) = subplot(1,3,1);
 plot(1:nMPC,jObjBF,'-o')
 grid on;hold on
 plot(1:nMPC,jObjFmin,'-o')
 legend('BF','FMINCON')
 xlabel('MPC step');
-ylabel('J')
+ylabel('$J_{total}$')
+
+
+spOpt(2) = subplot(1,3,2);
+plot(1:nMPC,jExploitBF,'-o')
+grid on;hold on
+plot(1:nMPC,jExploitFmin,'-o')
+legend('BF','FMINCON')
+xlabel('MPC step');
+ylabel('$J_{exploit}$')
+
+
+spOpt(3) = subplot(1,3,3);
+plot(1:nMPC,jExploreBF,'-o')
+grid on;hold on
+plot(1:nMPC,jExploreFmin,'-o')
+legend('BF','FMINCON')
+xlabel('MPC step');
+ylabel('$J_{explore}$')
+
+linkaxes(spOpt(1:3),'x')
+
+sgtitle('Optimization algorithms comparisons')
+
 
 % fval plots
 fvalPlot = gobjects;
 legendStrs = {'Omniscient unconstrained','Baseline','KFGP constrained'};
 
 figure
+subplot(1,2,1)
 fvalPlot(1) = plot(0:nSamp-1,fValOmni,'linewidth',1);
 grid on;hold on
 fvalPlot(2) = plot(0:nSamp-1,fValBaseline,'linewidth',1);
@@ -271,10 +309,9 @@ fvalPlot(3) = plot(0:nSamp-1,fValKFGP,'linewidth',1);
 legend(fvalPlot(1:3),legendStrs);
 xlabel('Time step');
 ylabel('$(v_{f} cos(\phi))^3$')
-title(sprintf('MPC triggered every %d steps',mpckfgpTimeStep/kfgpTimeStep));
 
 
-figure
+subplot(1,2,2)
 elevPlots = gobjects;
 elevPlots(1) = stairs(0:nSamp-1,omniElev,'linewidth',1);
 grid on;hold on
@@ -282,8 +319,10 @@ elevPlots(2) = plot([0 nSamp-1],baselineElev*[1 1],'linewidth',1);
 elevPlots(3) = stairs(0:nSamp-1,KFGPElev,'linewidth',1);
 legend(elevPlots(1:3),legendStrs);
 xlabel('Time step');
-ylabel('$(v_{f} cos(\phi))^3$')
-title(sprintf('MPC triggered every %d steps',mpckfgpTimeStep/kfgpTimeStep));
+ylabel('$\phi$')
+sgtitle(sprintf('MPC triggered every %d steps',mpckfgpTimeStep/kfgpTimeStep));
+
+set(findobj('-property','FontSize'),'FontSize',11);
 
 %% animation
 figure
