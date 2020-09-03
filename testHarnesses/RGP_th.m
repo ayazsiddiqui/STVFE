@@ -5,38 +5,39 @@ close all
 cd(fileparts(mfilename('fullpath')));
 
 
-%% initialize KFGP
+%% initialize RGP
 rng(1);
 
 % altitudes
 altitudes = 0:10:100;
-kfgpTimeStep = 0.25;
 
 % make class object
-kfgp = GP.KalmanFilteredGaussianProcess('squaredExponential','exponential',...
-    'windPowerLaw',altitudes,kfgpTimeStep);
+rgp = GP.RecursiveGaussianProcess('squaredExponential',...
+    'zeroMean',altitudes);
 
-kfgp.spatialCovAmp       = 1;
-kfgp.spatialLengthScale  = 20;
-kfgp.temporalCovAmp      = 1;
-kfgp.temporalLengthScale = 10;
-kfgp.noiseVariance       = 1e-3;
+rgp.spatialCovAmp       = 1;
+rgp.spatialLengthScale  = 20;
+rgp.noiseVariance       = 1e-3;
 
-kfgp.initVals = kfgp.initializeKFGP;
-kfgp.spatialCovMat = kfgp.makeSpatialCovarianceMatrix(altitudes);
-kfgp.spatialCovMatRoot = kfgp.calcSpatialCovMatRoot;
-
+rgp.spatialCovMat = rgp.makeSpatialCovarianceMatrix(altitudes);
+rgp.meanFnVector  = rgp.meanFunction(altitudes);
 
 % guassian process
-gp = GP.GaussianProcess('squaredExponential','exponential','windPowerLaw');
+gp = GP.GaussianProcess('squaredExponential','alwaysOne','zeroMean');
 
-gp.spatialCovAmp       = kfgp.spatialCovAmp;
-gp.spatialLengthScale  = kfgp.spatialLengthScale;
-gp.temporalCovAmp      = kfgp.temporalCovAmp;
-gp.temporalLengthScale = kfgp.temporalLengthScale;
-gp.noiseVariance       = kfgp.noiseVariance;
+gp.spatialCovAmp       = rgp.spatialCovAmp;
+gp.spatialLengthScale  = rgp.spatialLengthScale;
+gp.noiseVariance       = rgp.noiseVariance;
 
 %% generate synthetic flow data
+
+gp2 = GP.GaussianProcess('squaredExponential','exponential','windPowerLaw');
+gp2.spatialCovAmp       = rgp.spatialCovAmp;
+gp2.spatialLengthScale  = rgp.spatialLengthScale;
+gp2.temporalCovAmp      = 1;
+gp2.temporalLengthScale = 10;
+gp2.noiseVariance       = rgp.noiseVariance;
+
 % number of altitudes
 nAlt = numel(altitudes);
 % final time for data generation in minutes
@@ -46,14 +47,16 @@ timeStepSynData = 1;
 % standard deviation for synthetic data generation
 stdDevSynData = 0.5;
 % get the time series object
-[synFlow,synAlt] = kfgp.generateSyntheticFlowData(altitudes,tFinData,stdDevSynData,...
-    'timeStep',timeStepSynData);
+[synFlow,synAlt] = gp2.generateSyntheticFlowData(altitudes,tFinData,stdDevSynData,...
+    'timeStep',timeStepSynData,'temporalLengthScale',1);
 
-%% regression using traditional GP
+%% regression using traditional GP and RGP
+% time step
+dt = 0.25;
 % algorithm final time
 algFinTime = 30;
 % sampling time vector
-tSamp = 0:kfgp.kfgpTimeStep:algFinTime;
+tSamp = 0:dt:algFinTime;
 % number of samples
 nSamp = numel(tSamp);
 
@@ -73,11 +76,11 @@ upBoundGP   = NaN(nfinAlt,nSamp);
 loBoundGP   = NaN(nfinAlt,nSamp);
 
 % preallocate matrices for KFGP
-predMeansKFGP = NaN(nfinAlt,nSamp);
-postVarsKFGP  = NaN(nfinAlt,nSamp);
-stdDevKFGP    = NaN(nfinAlt,nSamp);
-upBoundKFGP   = NaN(nfinAlt,nSamp);
-loBoundKFGP   = NaN(nfinAlt,nSamp);
+predMeansRGP = NaN(nfinAlt,nSamp);
+postVarsRGP  = NaN(nfinAlt,nSamp);
+stdDevRGP    = NaN(nfinAlt,nSamp);
+upBoundRGP   = NaN(nfinAlt,nSamp);
+loBoundRGP   = NaN(nfinAlt,nSamp);
 
 % number of std deviations for bounds calculations
 numStdDev = 1;
@@ -89,7 +92,7 @@ for ii = 1:nSamp
     if ii == 1
         xSamp(ii) = altitudes(randperm(nAlt,1));
     else
-        [~,maxVarIdx] = max(postVarsKFGP(:,ii-1));
+        [~,maxVarIdx] = max(postVarsRGP(:,ii-1));
         xSamp(ii) = finAlt(maxVarIdx);
     end
     % measure flow at xSamp(ii) at tSamp(ii)
@@ -101,32 +104,30 @@ for ii = 1:nSamp
     % recursion
     if ii == 1
         % KFGP: initial state estimate
-        sk_k   = kfgp.initVals.s0;
-        ck_k   = kfgp.initVals.sig0Mat;
+        muGt_1   = rgp.meanFnVector;
+        cGt_1    = rgp.spatialCovMat;
         % GP: covariance matrix
         covMat = gp.makeTotalCovarianceMatrix(XTSamp(:,ii));        
     else
         % KFGP: initial state estimate
-        sk_k   = skp1_kp1;
-        ck_k   = ckp1_kp1;
+        muGt_1   = predMean';
+        cGt_1    = postVarMat;
         % GP: covariance matrix
         covMat = gp.augmentCovarianceMatrix(XTSamp(:,1:ii-1),...
             XTSamp(:,ii),covMat);
     end
-    % KFGP: calculate kalman states
-    [F_t,sigF_t,skp1_kp1,ckp1_kp1] = ...
-        kfgp.calcKalmanStateEstimates(sk_k,ck_k,xSamp(ii),ySamp(ii));
     % KFGP: calculate prediction mean and posterior variance
-    [muKFGP,sigKFGP] = kfgp.calcPredMeanAndPostVar(finAlt,F_t,sigF_t);  
+    [predMean,postVarMat] =...
+        rgp.calcPredMeanAndPostVar(muGt_1,cGt_1,xSamp(ii),ySamp(ii));  
     % KFGP: store them
-    predMeansKFGP(:,ii) = muKFGP;
-    postVarsKFGP(:,ii)  = sigKFGP;
+    predMeansRGP(:,ii) = predMean;
+    postVarsRGP(:,ii)  = diag(postVarMat);
     % KFGP: calculate bounds
-    stdDevKFGP(:,ii) = postVarsKFGP(:,ii).^0.5;
+    stdDevRGP(:,ii) = postVarsRGP(:,ii).^0.5;
     % KFGP: upper bounds = mean + x*(standard deviation)
-    upBoundKFGP(:,ii) = predMeansKFGP(:,ii) + numStdDev*stdDevKFGP(:,ii);
+    upBoundRGP(:,ii) = predMeansRGP(:,ii) + numStdDev*stdDevRGP(:,ii);
     % KFGP: lower bounds = mean - x*(standard deviation)
-    loBoundKFGP(:,ii) = predMeansKFGP(:,ii) - numStdDev*stdDevKFGP(:,ii);
+    loBoundRGP(:,ii) = predMeansRGP(:,ii) - numStdDev*stdDevRGP(:,ii);
         
     % GP: calculate prediction mean and posterior variance
     [muGP,sigGP] = ...
@@ -144,14 +145,13 @@ for ii = 1:nSamp
     
 end
 
-
 %% convert results to time series and store in strcut
-regressionRes(1).predMean  = timeseries(predMeansKFGP,tSamp*60);
-regressionRes(1).loBound   = timeseries(loBoundKFGP,tSamp*60);
-regressionRes(1).upBound   = timeseries(upBoundKFGP,tSamp*60);
+regressionRes(1).predMean  = timeseries(predMeansRGP,tSamp*60);
+regressionRes(1).loBound   = timeseries(loBoundRGP,tSamp*60);
+regressionRes(1).upBound   = timeseries(upBoundRGP,tSamp*60);
 regressionRes(1).dataSamp  = timeseries([xSamp;ySamp'],tSamp*60);
 regressionRes(1).dataAlts  = timeseries(repmat(finAlt(:),1,nSamp),tSamp*60);
-regressionRes(1).legend    = 'KFGP';
+regressionRes(1).legend    = 'RGP';
 
 regressionRes(2).predMean  = timeseries(predMeansGP,tSamp*60);
 regressionRes(2).loBound   = timeseries(loBoundGP,tSamp*60);
@@ -164,5 +164,3 @@ regressionRes(2).legend    = 'GP';
 %% plot the data
 F = animatedPlot(synFlow,synAlt,'plotTimeStep',0.25,...
     'regressionResults',regressionRes);
-
-

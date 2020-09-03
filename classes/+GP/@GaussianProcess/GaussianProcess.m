@@ -18,7 +18,7 @@ classdef GaussianProcess
     
     % class parameters
     properties (SetAccess = protected)
-        kernelChoices = {'exponential','squaredExponential'};
+        kernelChoices = {'exponential','squaredExponential','alwaysOne'};
         meanFnChoices = {'zeroMean','windPowerLaw'};
     end
     
@@ -93,6 +93,8 @@ classdef GaussianProcess
                     val = @ExponentialKernel;
                 case 'squaredExponential'
                     val = @SquaredExponentialKernel;
+                case 'alwaysOne'
+                    val = @alwaysOneCovarianceKernel;
             end
         end
         
@@ -364,13 +366,6 @@ classdef GaussianProcess
         end
         
     end
-    
-    %% external methods
-    %     methods
-    %         function val = generateSyntheticFlowData(obj,x,y)
-    %             val = generateSyntheticFlowData(obj,x,y);
-    %         end
-    %     end
     
     
 end
