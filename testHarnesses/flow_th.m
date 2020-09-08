@@ -3,6 +3,7 @@ clc
 close all
 
 cd(fileparts(mfilename('fullpath')));
+load('envFile');
 
 
 %% initialize GP
@@ -45,5 +46,15 @@ gp2.spatialLengthScale = asin((gp.spatialLengthScale/thrLength)^0.5)*180/pi;
     'timeStep',timeStepSynData);
 
 %% plot the data
-F = animatedPlot(synFlow,synAlt,'plotTimeStep',1);
+% F = animatedPlot(synFlow,synAlt,'plotTimeStep',1);
+
+%% test CNAPS flow
+cnapsTvec    = squeeze(testEnv.flowVecTimeseries.Value.Time);
+cnapsFlow    = squeeze(testEnv.flowVecTimeseries.Value.Data(1,1,:,1,:));
+synCnaps     = timeseries(cnapsFlow,cnapsTvec);
+
+CNAPSalts    = timeseries(repmat(testEnv.zGridPoints.Value',1,2),...
+    [cnapsTvec(1),cnapsTvec(end)]);
+
+F2 = animatedPlot(synCnaps,CNAPSalts,'plotTimeStep',10);
 
