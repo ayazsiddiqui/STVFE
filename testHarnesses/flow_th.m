@@ -49,12 +49,16 @@ gp2.spatialLengthScale = asin((gp.spatialLengthScale/thrLength)^0.5)*180/pi;
 % F = animatedPlot(synFlow,synAlt,'plotTimeStep',1);
 
 %% test CNAPS flow
-cnapsTvec    = squeeze(testEnv.flowVecTimeseries.Value.Time);
-cnapsFlow    = squeeze(testEnv.flowVecTimeseries.Value.Data(1,1,:,1,:));
+cnapsData.dataHours = 10;
+cnapsData.dataIdx   = testEnv.flowVecTimeseries.Value.Time<=cnapsData.dataHours*3600;
+cnapsTvec    = squeeze(testEnv.flowVecTimeseries.Value.Time(cnapsData.dataIdx));
+cnapsFlow    = squeeze(testEnv.flowVecTimeseries.Value.Data(1,1,:,1,cnapsData.dataIdx));
 synCnaps     = timeseries(cnapsFlow,cnapsTvec);
 
 CNAPSalts    = timeseries(repmat(testEnv.zGridPoints.Value',1,2),...
     [cnapsTvec(1),cnapsTvec(end)]);
 
-F2 = animatedPlot(synCnaps,CNAPSalts,'plotTimeStep',10);
+F2 = animatedPlot(synCnaps,CNAPSalts,'plotTimeStep',10,'wait',false);
+
+%% video settings
 

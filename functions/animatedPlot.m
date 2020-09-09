@@ -104,8 +104,9 @@ if regDataAvailable
 end
 
 % make animation
-val = struct('cdata',uint8(zeros(840,1680,3)),'colormap',[]);
-val(1) = getframe(axisObj);
+% val = struct('cdata',uint8(zeros(840,1680,3)),'colormap',[]);
+val = struct('cdata',uint8(zeros(525,700,3)),'colormap',[]);
+val(1) = acquireFrame;
 
 for ii = 2:nTs
     
@@ -126,7 +127,7 @@ for ii = 2:nTs
     title(sprintf('Time = %.2f min',tVec(ii)/60));
     
     % get frame for animation
-    val(ii) = getframe(axisObj);
+    val(ii) = acquireFrame;
     
     if pp.Results.waitForButton
         waitforbuttonpress;
@@ -136,3 +137,8 @@ end
 
 end
 
+function F = acquireFrame()
+F = getframe;
+% cdata = print('-RGBImage','-r120');
+% F = im2frame(cdata);
+end
