@@ -21,7 +21,7 @@ kfgp.spatialCovAmp       = 1;
 kfgp.spatialLengthScale  = 20;
 kfgp.temporalCovAmp      = 1;
 kfgp.temporalLengthScale = 10;
-kfgp.noiseVariance       = 1e-3;
+kfgp.noiseVariance       = 1e-2;
 
 kfgp.initVals = kfgp.initializeKFGP;
 kfgp.spatialCovMat = kfgp.makeSpatialCovarianceMatrix(altitudes);
@@ -49,9 +49,10 @@ tSamp = 0:kfgp.kfgpTimeStep:algFinTime;
 nSamp = numel(tSamp);
 
 % preallocat sampling matrices
-xSamp  = NaN(1,nSamp);
-ySamp  = NaN(nSamp,1);
-XTSamp = NaN(2,nSamp);
+xSamp   = NaN(1,nSamp);
+ySamp   = NaN(nSamp,1);
+flowVal = NaN(nSamp,1);
+XTSamp  = NaN(2,nSamp);
 
 % preallocate matrices for KFGP
 predMeansKFGP = NaN(nAlt,nSamp);
@@ -66,7 +67,7 @@ numStdDev = 1;
 
 %% initialize MPC KFGP
 % mpc time step
-mpckfgpTimeStep = 0.5;
+mpckfgpTimeStep = 1;
 % mpc prediction horizon
 predictionHorz  = 6;
 % fmincon options
@@ -81,11 +82,11 @@ mpckfgp.temporalCovAmp      = kfgp.temporalCovAmp;
 mpckfgp.temporalLengthScale = kfgp.temporalLengthScale;
 mpckfgp.noiseVariance       = kfgp.noiseVariance;
 
-mpckfgp.initVals = mpckfgp.initializeKFGP;
-mpckfgp.spatialCovMat = mpckfgp.makeSpatialCovarianceMatrix(altitudes);
-mpckfgp.spatialCovMatRoot = mpckfgp.calcSpatialCovMatRoot;
+mpckfgp.initVals            = mpckfgp.initializeKFGP;
+mpckfgp.spatialCovMat       = mpckfgp.makeSpatialCovarianceMatrix(altitudes);
+mpckfgp.spatialCovMatRoot   = mpckfgp.calcSpatialCovMatRoot;
 
-mpckfgp.tetherLength         = 200;
+mpckfgp.tetherLength        = 100;
 
 % acquistion function parameters
 mpckfgp.exploitationConstant = 1;
@@ -137,6 +138,8 @@ fValOmni     = nan(1,nSamp);
 omniElev     = nan(1,nSamp);
 elevsAtAllAlts = asin(altitudes/mpckfgp.tetherLength)*180/pi;
 cosElevAtAllAlts = cosd(elevsAtAllAlts);
+meanFnVec = kfgp.meanFunction(altitudes);
+
 % baseline contoller
 baselineElev = 15;
 baselineAlt  = mpckfgp.tetherLength*sind(baselineElev);
@@ -157,7 +160,8 @@ for ii = 1:nSamp
     % measure flow at xSamp(ii) at tSamp(ii)
     fData = resample(synFlow,tSamp(ii)*60).Data;
     hData = resample(synAlt,tSamp(ii)*60).Data;
-    ySamp(ii) = interp1(hData,fData,xSamp(ii));
+    flowVal(ii) = interp1(hData,fData,xSamp(ii));
+    ySamp(ii) =  kfgp.meanFunction(xSamp(ii)) - flowVal(ii);
     % calculate pseudo power
     % omniscient, uncontrained controller
     [fValOmni(ii),omniIdx] = max((fData.*cosElevAtAllAlts(:)).^3);
@@ -166,7 +170,7 @@ for ii = 1:nSamp
     fValBaseline(ii) = (interp1(hData,fData,baselineAlt)*cosd(baselineElev))^3;
 %     % KFGP
     KFGPElev(ii)  = asin(xSamp(ii)/mpckfgp.tetherLength)*180/pi;
-    fValKFGP(ii) = (ySamp(ii)*cosd(KFGPElev(ii)))^3;
+    fValKFGP(ii) = (flowVal(ii)*cosd(KFGPElev(ii)))^3;
     % augment altitude and height in XTsamp
     XTSamp(:,ii) = [xSamp(ii);tSamp(ii)];
     % recursion
@@ -185,7 +189,7 @@ for ii = 1:nSamp
     % KFGP: calculate prediction mean and posterior variance
     [muKFGP,sigKFGP] = kfgp.calcPredMeanAndPostVar(altitudes,F_t,sigF_t);
     % KFGP: store them
-    predMeansKFGP(:,ii) = muKFGP;
+    predMeansKFGP(:,ii) = meanFnVec(:) - muKFGP;
     postVarsKFGP(:,ii)  = sigKFGP;
     % KFGP: calculate bounds
     stdDevKFGP(:,ii) = postVarsKFGP(:,ii).^0.5;

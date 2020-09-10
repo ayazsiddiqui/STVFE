@@ -184,6 +184,6 @@ regressionRes(2).legend    = 'GP';
 
 %% plot the data
 F = animatedPlot(synFlow,synAlt,'plotTimeStep',0.25,...
-    'regressionResults',regressionRes);
+    'regressionResults',regressionRes,'wait',true);
 
 

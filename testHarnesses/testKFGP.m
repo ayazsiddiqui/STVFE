@@ -53,6 +53,7 @@ nSamp = numel(tSamp);
 % preallocat sampling matrices
 xSamp  = NaN(1,nSamp);
 ySamp  = NaN(nSamp,1);
+flowVal = NaN(nSamp,1);
 XTSamp = NaN(2,nSamp);
 
 % preallocate matrices for KFGP
@@ -134,7 +135,8 @@ for ii = 1:nSamp
     % measure flow at xSamp(ii) at tSamp(ii)
     fData = resample(synFlow,tSamp(ii)*60).Data;
     hData = resample(synAlt,tSamp(ii)*60).Data;
-    ySamp(ii) = interp1(hData,fData,xSamp(ii));
+    flowVal(ii) = interp1(hData,fData,xSamp(ii));
+    ySamp(ii) =  gp2.meanFunction(xSamp(ii)) - flowVal(ii);
     % augment altitude and height in XTsamp
     XTSamp(:,ii) = [xSamp(ii);tSamp(ii)];
     % recursion

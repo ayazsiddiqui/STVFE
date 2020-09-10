@@ -183,6 +183,7 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
             xPredict = obj.convertMeanElevToAlt(meanElevation);
             % calculate prediction mean and posterior variance
             [flowPred,flowVar] = obj.calcPredMeanAndPostVar(xPredict,F_t,sigF_t);
+            flowPred = obj.meanFunction(xPredict) - flowPred;
             % exploitation incentive
             jExploit = obj.exploitationConstant*(flowPred.*cosd(meanElevation)).^3;
             % exploration incentive
@@ -216,7 +217,7 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
                 % perform kalman state estimation
                 [F_t,sigF_t,skp1_kp1,ckp1_kp1] = ...
                     obj.calcKalmanStateEstimates(sk_k,ck_k,Mk(ii),...
-                    obj.meanFunction(Mk(ii)));
+                    []);
 
             end
             % mpc objective function val
@@ -260,7 +261,6 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
                     meanElevTraj(ii,:));
             end
             [~,maxIdx] = max(mpcAqFunc);
-            [B,I] = sort(mpcAqFunc,'descend');
             val = meanElevTraj(maxIdx,:);
             varargout{1} = uTraj(maxIdx,:);
             
