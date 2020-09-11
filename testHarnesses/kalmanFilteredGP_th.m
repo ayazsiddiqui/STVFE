@@ -9,7 +9,7 @@ cd(fileparts(mfilename('fullpath')));
 rng(60);
 
 % altitudes
-altitudes = 0:10:100;
+altitudes = 0:100:1000;
 kfgpTimeStep = 0.05;
 
 % spatial kernel
@@ -17,10 +17,10 @@ kfgpTimeStep = 0.05;
 kfgp = GP.KalmanFilteredGaussianProcess('squaredExponential','exponential',...
     'windPowerLaw',altitudes,kfgpTimeStep);
 
-kfgp.spatialCovAmp       = 1;
-kfgp.spatialLengthScale  = 20;
+kfgp.spatialCovAmp       = 5.1^2;
+kfgp.spatialLengthScale  = 200;
 kfgp.temporalCovAmp      = 1;
-kfgp.temporalLengthScale = 10;
+kfgp.temporalLengthScale = 22;
 kfgp.noiseVariance       = 1e-2;
 
 kfgp.initVals = kfgp.initializeKFGP;
@@ -42,7 +42,7 @@ stdDevSynData = 0.5;
 
 %% regression using KFGP
 % algorithm final time
-algFinTime = 30;
+algFinTime = 60;
 % sampling time vector
 tSamp = 0:kfgp.kfgpTimeStep:algFinTime;
 % number of samples
@@ -86,7 +86,7 @@ mpckfgp.initVals            = mpckfgp.initializeKFGP;
 mpckfgp.spatialCovMat       = mpckfgp.makeSpatialCovarianceMatrix(altitudes);
 mpckfgp.spatialCovMatRoot   = mpckfgp.calcSpatialCovMatRoot;
 
-mpckfgp.tetherLength        = 100;
+mpckfgp.tetherLength        = 500;
 
 % acquistion function parameters
 mpckfgp.exploitationConstant = 1;
@@ -94,7 +94,7 @@ mpckfgp.explorationConstant  = 250;
 mpckfgp.predictionHorizon    = predictionHorz;
 
 % max mean elevation angle step size
-duMax = 5;
+duMax = 20;
 Astep = zeros(predictionHorz-1,predictionHorz);
 bstep = duMax*ones(2*(predictionHorz-1),1);
 for ii = 1:predictionHorz-1
@@ -113,9 +113,9 @@ fsBoundsA(1,1) = 1;
 fsBoundsA(2,1) = -1;
 A = [fsBoundsA;Astep];
 % upper and lower bounds
-minElev = asin(altitudes(2)/mpckfgp.tetherLength)*180/pi;
+minElev = 5;
 lb = minElev*ones(1,predictionHorz);
-maxElev = asin(max(altitudes)/mpckfgp.tetherLength)*180/pi;
+maxElev = 60;
 ub = maxElev*ones(1,predictionHorz);
 
 uAllowable = linspace(-duMax,duMax,5);
@@ -136,7 +136,7 @@ uTrajBF = nan(predictionHorz,nMPC);
 % omniscient controller preallocation
 fValOmni     = nan(1,nSamp);
 omniElev     = nan(1,nSamp);
-elevsAtAllAlts = asin(altitudes/mpckfgp.tetherLength)*180/pi;
+elevsAtAllAlts = min(max(minElev,asin(altitudes/mpckfgp.tetherLength)*180/pi),maxElev);
 cosElevAtAllAlts = cosd(elevsAtAllAlts);
 meanFnVec = kfgp.meanFunction(altitudes);
 
@@ -154,7 +154,7 @@ jj = 1;
 for ii = 1:nSamp
     % go to xSamp
     if ii == 1
-        nextPoint = altitudes(randperm(nAlt,1));
+        nextPoint = baselineAlt;
     end
     xSamp(ii) = nextPoint;
     % measure flow at xSamp(ii) at tSamp(ii)
@@ -255,7 +255,7 @@ end
 regressionRes(1).predMean  = timeseries(predMeansKFGP,tSamp*60);
 regressionRes(1).loBound   = timeseries(loBoundKFGP,tSamp*60);
 regressionRes(1).upBound   = timeseries(upBoundKFGP,tSamp*60);
-regressionRes(1).dataSamp  = timeseries([xSamp;ySamp'],tSamp*60);
+regressionRes(1).dataSamp  = timeseries([xSamp;flowVal'],tSamp*60);
 regressionRes(1).dataAlts  = synAlt;
 regressionRes(1).legend    = 'KFGP';
 
