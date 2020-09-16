@@ -35,7 +35,7 @@ tFinData = 300;
 % time step for synthetic data generation
 timeStepSynData = 0.5;
 % standard deviation for synthetic data generation
-stdDevSynData = 0.5;
+stdDevSynData = 4;
 % get the time series object
 [synFlow,synAlt] = kfgp.generateSyntheticFlowData(altitudes,tFinData,stdDevSynData,...
     'timeStep',timeStepSynData);
@@ -86,15 +86,15 @@ mpckfgp.initVals            = mpckfgp.initializeKFGP;
 mpckfgp.spatialCovMat       = mpckfgp.makeSpatialCovarianceMatrix(altitudes);
 mpckfgp.spatialCovMatRoot   = mpckfgp.calcSpatialCovMatRoot;
 
-mpckfgp.tetherLength        = 500;
+mpckfgp.tetherLength        = 800;
 
 % acquistion function parameters
 mpckfgp.exploitationConstant = 1;
-mpckfgp.explorationConstant  = 250;
+mpckfgp.explorationConstant  = 150;
 mpckfgp.predictionHorizon    = predictionHorz;
 
 % max mean elevation angle step size
-duMax = 20;
+duMax = 10;
 Astep = zeros(predictionHorz-1,predictionHorz);
 bstep = duMax*ones(2*(predictionHorz-1),1);
 for ii = 1:predictionHorz-1
@@ -114,29 +114,30 @@ fsBoundsA(2,1) = -1;
 A = [fsBoundsA;Astep];
 % upper and lower bounds
 minElev = 5;
-lb = minElev*ones(1,predictionHorz);
+lb      = minElev*ones(1,predictionHorz);
 maxElev = 60;
-ub = maxElev*ones(1,predictionHorz);
+ub      = maxElev*ones(1,predictionHorz);
 
 uAllowable = linspace(-duMax,duMax,5);
 
 % number of times mpc will trigger
-nMPC = floor(tSamp(end)/mpckfgpTimeStep);
-tMPC     = nan(1,nMPC);
-jObjFmin = nan(1,nMPC);
+nMPC         = floor(tSamp(end)/mpckfgpTimeStep);
+tMPC         = nan(1,nMPC);
+jObjFmin     = nan(1,nMPC);
 jExploitFmin = nan(1,nMPC);
 jExploreFmin = nan(1,nMPC);
-uTrajFmin = nan(predictionHorz,nMPC);
+uTrajFmin    = nan(predictionHorz,nMPC);
 
-jObjBF   = nan(1,nMPC);
+jObjBF     = nan(1,nMPC);
 jExploitBF = nan(1,nMPC);
 jExploreBF = nan(1,nMPC);
-uTrajBF = nan(predictionHorz,nMPC);
+uTrajBF    = nan(predictionHorz,nMPC);
 
 % omniscient controller preallocation
 fValOmni     = nan(1,nSamp);
 omniElev     = nan(1,nSamp);
 elevsAtAllAlts = min(max(minElev,asin(altitudes/mpckfgp.tetherLength)*180/pi),maxElev);
+omniAlts = mpckfgp.convertMeanElevToAlt(elevsAtAllAlts);
 cosElevAtAllAlts = cosd(elevsAtAllAlts);
 meanFnVec = kfgp.meanFunction(altitudes);
 
@@ -164,13 +165,14 @@ for ii = 1:nSamp
     ySamp(ii) =  kfgp.meanFunction(xSamp(ii)) - flowVal(ii);
     % calculate pseudo power
     % omniscient, uncontrained controller
-    [fValOmni(ii),omniIdx] = max((fData.*cosElevAtAllAlts(:)).^3);
+    omnifData = interp1(hData,fData,omniAlts);
+    [fValOmni(ii),omniIdx] = max(cosineFlowCubed(omnifData,cosElevAtAllAlts));
     omniElev(ii) = elevsAtAllAlts(omniIdx);
     % base line
-    fValBaseline(ii) = (interp1(hData,fData,baselineAlt)*cosd(baselineElev))^3;
-%     % KFGP
+    fValBaseline(ii) = cosineFlowCubed(interp1(hData,fData,baselineAlt),cosd(baselineElev));
+    % KFGP
     KFGPElev(ii)  = asin(xSamp(ii)/mpckfgp.tetherLength)*180/pi;
-    fValKFGP(ii) = (flowVal(ii)*cosd(KFGPElev(ii)))^3;
+    fValKFGP(ii)  = cosineFlowCubed(flowVal(ii),cosd(KFGPElev(ii)));
     % augment altitude and height in XTsamp
     XTSamp(:,ii) = [xSamp(ii);tSamp(ii)];
     % recursion
@@ -332,6 +334,6 @@ set(findobj('-property','FontSize'),'FontSize',11);
 figure
 F = animatedPlot(synFlow,synAlt,'plotTimeStep',0.25,...
     'regressionResults',regressionRes...
-    ,'waitforbutton',true);
+    ,'waitforbutton',false);
 
 

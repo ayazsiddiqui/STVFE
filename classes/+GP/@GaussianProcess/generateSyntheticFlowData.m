@@ -49,6 +49,7 @@ timeInSec = timeVals*60;
 
 % select values from 6 to end-5
 filterSamp = filterSamp(6:end-5,6:end-5);
+filterSamp(filterSamp<0) = 0;
 timeInSec  = timeInSec(6:end-5);
 altitudes  = altitudes(6:end-5);
 

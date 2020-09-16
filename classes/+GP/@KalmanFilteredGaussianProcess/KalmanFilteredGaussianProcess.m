@@ -185,7 +185,8 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
             [flowPred,flowVar] = obj.calcPredMeanAndPostVar(xPredict,F_t,sigF_t);
             flowPred = obj.meanFunction(xPredict) - flowPred;
             % exploitation incentive
-            jExploit = obj.exploitationConstant*(flowPred.*cosd(meanElevation)).^3;
+            jExploit = obj.exploitationConstant*...
+                cosineFlowCubed(flowPred,cosd(meanElevation));
             % exploration incentive
             jExplore = obj.explorationConstant*flowVar;
             % sum

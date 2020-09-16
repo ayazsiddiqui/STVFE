@@ -77,7 +77,6 @@ xHiLim = ceil(ub) + mod(ceil(ub),xlimRes);
 % set value
 axisObj.XLim = [xLoLim xHiLim];
 
-
 % create flow plot object
 plotFlowObj = plot(flowVals(:,:,1),altVals(:,1,1),'k-',...
     'linewidth',1);
