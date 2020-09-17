@@ -294,6 +294,7 @@ end
 
 filName = strcat('monteCarloStruct_',strrep(datestr(datetime),':','-'));
 save(filName,'moteCarloRes','rngSeeds','DUMAX','BETA');
+save(strcat('allData_',filName));
 
 %% convert results to time series and store in strcut
 AVG_VALS.KFGP = mean(moteCarloRes.kfgpMPC,3);
