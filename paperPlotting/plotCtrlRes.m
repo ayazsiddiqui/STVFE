@@ -6,7 +6,7 @@ cd(fileparts(mfilename('fullpath')));
 
 
 %% initialize KFGP
-rng(60);
+rng(4);
 
 % altitudes
 altitudes = 0:100:1000;
@@ -31,7 +31,7 @@ kfgp.spatialCovMatRoot = kfgp.calcSpatialCovMatRoot;
 % number of altitudes
 nAlt = numel(altitudes);
 % final time for data generation in minutes
-tFinData = 300;
+tFinData = 120;
 % time step for synthetic data generation
 timeStepSynData = 1;
 % standard deviation for synthetic data generation
@@ -39,6 +39,10 @@ stdDevSynData = 4;
 % get the time series object
 [synFlow,synAlt] = kfgp.generateSyntheticFlowData(altitudes,tFinData,stdDevSynData,...
     'timeStep',timeStepSynData);
+
+axisObj = paperFlowPlot(synFlow,altitudes,60);
+keyboard
+close
 
 %% regression using KFGP
 % algorithm final time
@@ -64,7 +68,6 @@ loBoundKFGP   = NaN(nAlt,nSamp);
 % number of std deviations for bounds calculations
 numStdDev = 1;
 
-
 %% initialize MPC KFGP
 % mpc time step
 mpckfgpTimeStep = 1;
@@ -86,7 +89,7 @@ mpckfgp.initVals            = mpckfgp.initializeKFGP;
 mpckfgp.spatialCovMat       = mpckfgp.makeSpatialCovarianceMatrix(altitudes);
 mpckfgp.spatialCovMatRoot   = mpckfgp.calcSpatialCovMatRoot;
 
-mpckfgp.tetherLength        = 800;
+mpckfgp.tetherLength        = 1000;
 
 % acquistion function parameters
 mpckfgp.exploitationConstant = 1;
@@ -94,7 +97,7 @@ mpckfgp.explorationConstant  = 150;
 mpckfgp.predictionHorizon    = predictionHorz;
 
 % max mean elevation angle step size
-duMax = 10;
+duMax = 2;
 Astep = zeros(predictionHorz-1,predictionHorz);
 bstep = duMax*ones(2*(predictionHorz-1),1);
 for ii = 1:predictionHorz-1
@@ -134,23 +137,51 @@ jExploreBF = nan(1,nMPC);
 uTrajBF    = nan(predictionHorz,nMPC);
 
 % omniscient controller preallocation
-fValOmni     = nan(1,nSamp);
-omniElev     = nan(1,nSamp);
+fValOmni       = nan(1,nSamp);
+runAvgOmni     = nan(1,nSamp);
+omniElev       = nan(1,nSamp);
 elevsAtAllAlts = min(max(minElev,asin(altitudes/mpckfgp.tetherLength)*180/pi),maxElev);
 omniAlts = mpckfgp.convertMeanElevToAlt(elevsAtAllAlts);
 cosElevAtAllAlts = cosd(elevsAtAllAlts);
 meanFnVec = kfgp.meanFunction(altitudes);
 
 % baseline contoller
-baselineElev = 15;
-baselineAlt  = mpckfgp.tetherLength*sind(baselineElev);
-fValBaseline = nan(1,nSamp);
+fValBaseline   = nan(1,nSamp);
+runAvgbaseline = nan(1,nSamp);
 % KFGP control
 fValKFGP     = nan(1,nSamp);
 KFGPElev     = nan(1,nSamp);
+runAvgKFGP   = nan(1,nSamp);
 
 % mpc counter
 jj = 1;
+
+%% omniscient
+for ii = 1:nSamp
+    % measure flow at xSamp(ii) at tSamp(ii)
+    fData = resample(synFlow,tSamp(ii)*60).Data;
+    hData = resample(synAlt,tSamp(ii)*60).Data;
+    % calculate pseudo power
+    % omniscient, uncontrained controller
+    omnifData = interp1(hData,fData,omniAlts);
+    [fValOmni(ii),omniIdx] = max(cosineFlowCubed(omnifData,cosElevAtAllAlts));
+    runAvgOmni(ii) = mean(fValOmni(1:ii));
+    omniElev(ii) = elevsAtAllAlts(omniIdx);
+end
+
+%% baseline
+baselineElev   = ceil(mean(omniElev));
+baselineAlt    = mpckfgp.tetherLength*sind(baselineElev);
+
+for ii = 1:nSamp
+    % measure flow at xSamp(ii) at tSamp(ii)
+    fData = resample(synFlow,tSamp(ii)*60).Data;
+    hData = resample(synAlt,tSamp(ii)*60).Data;
+    % base line
+    fValBaseline(ii) = cosineFlowCubed(interp1(hData,fData,baselineAlt),cosd(baselineElev));
+    runAvgbaseline(ii) = mean(fValBaseline(1:ii));
+end
+
 %% do the regresson
 for ii = 1:nSamp
     % go to xSamp
@@ -164,15 +195,10 @@ for ii = 1:nSamp
     flowVal(ii) = interp1(hData,fData,xSamp(ii));
     ySamp(ii) =  kfgp.meanFunction(xSamp(ii)) - flowVal(ii);
     % calculate pseudo power
-    % omniscient, uncontrained controller
-    omnifData = interp1(hData,fData,omniAlts);
-    [fValOmni(ii),omniIdx] = max(cosineFlowCubed(omnifData,cosElevAtAllAlts));
-    omniElev(ii) = elevsAtAllAlts(omniIdx);
-    % base line
-    fValBaseline(ii) = cosineFlowCubed(interp1(hData,fData,baselineAlt),cosd(baselineElev));
     % KFGP
     KFGPElev(ii)  = asin(xSamp(ii)/mpckfgp.tetherLength)*180/pi;
     fValKFGP(ii)  = cosineFlowCubed(flowVal(ii),cosd(KFGPElev(ii)));
+    runAvgKFGP(ii) = mean(fValKFGP(1:ii));
     % augment altitude and height in XTsamp
     XTSamp(:,ii) = [xSamp(ii);tSamp(ii)];
     % recursion
@@ -199,11 +225,10 @@ for ii = 1:nSamp
     upBoundKFGP(:,ii) = predMeansKFGP(:,ii) + numStdDev*stdDevKFGP(:,ii);
     % KFGP: lower bounds = mean - x*(standard deviation)
     loBoundKFGP(:,ii) = predMeansKFGP(:,ii) - numStdDev*stdDevKFGP(:,ii);
-    
     % MPCKFGP: make decision about next point
     meanElevation = asin(xSamp(ii)/mpckfgp.tetherLength)*180/pi;
     fsBoundsB(1,1) = meanElevation + duMax;
-    fsBoundsB(2,1) = meanElevation - duMax;
+    fsBoundsB(2,1) = -(meanElevation - duMax);
     b = [fsBoundsB;bstep];
     
     if ii>1 && mod(tSamp(ii),mpckfgp.kfgpTimeStep)==0
@@ -228,29 +253,30 @@ for ii = 1:nSamp
         jExploreFmin(jj) = sum(jExpreFmin);
         
         % brute force
-        bruteForceTraj = mpckfgp.bruteForceTrajectoryOpt(...
-            F_t_mpc,sigF_t_mpc,skp1_kp1_mpc,ckp1_kp1_mpc,...
-            meanElevation,uAllowable,lb(1),ub(1));
-        uTrajBF(:,jj) = mpckfgp.calcDelevTraj(meanElevation,bruteForceTraj);
-        % get other values
-        [jObjBF(jj),jExptBF,jExprBF] = ...
-            mpckfgp.calcMpcObjectiveFn(...
-            F_t_mpc,sigF_t_mpc,skp1_kp1_mpc,ckp1_kp1_mpc,...
-            bruteForceTraj);
-        jExploitBF(jj) = sum(jExptBF);
-        jExploreBF(jj) = sum(jExprBF);
+%         bruteForceTraj = mpckfgp.bruteForceTrajectoryOpt(...
+%             F_t_mpc,sigF_t_mpc,skp1_kp1_mpc,ckp1_kp1_mpc,...
+%             meanElevation,uAllowable,lb(1),ub(1));
+%         uTrajBF(:,jj) = mpckfgp.calcDelevTraj(meanElevation,bruteForceTraj);
+%         % get other values
+%         [jObjBF(jj),jExptBF,jExprBF] = ...
+%             mpckfgp.calcMpcObjectiveFn(...
+%             F_t_mpc,sigF_t_mpc,skp1_kp1_mpc,ckp1_kp1_mpc,...
+%             bruteForceTraj);
+%         jExploitBF(jj) = sum(jExptBF);
+%         jExploreBF(jj) = sum(jExprBF);
 
         % next point
         nextPoint = mpckfgp.convertMeanElevToAlt(bestTraj(1));
 %         nextPoint = mpckfgp.convertMeanElevToAlt(bruteForceTraj(1));
         disp(['FMINCON :',num2str(mpckfgp.convertMeanElevToAlt(bestTraj'),'%.3f ')]);
-        disp(['BF      :',num2str(mpckfgp.convertMeanElevToAlt(bruteForceTraj),'%.3f ')]);
+%         disp(['BF      :',num2str(mpckfgp.convertMeanElevToAlt(bruteForceTraj),'%.3f ')]);
         fprintf('\n');
         jj = jj+1;
     end
     
     
 end
+
 
 
 %% convert results to time series and store in strcut
@@ -263,77 +289,126 @@ regressionRes(1).legend    = 'KFGP';
 
 meanVals = [mean(fValOmni) mean(fValBaseline) mean(fValKFGP)];
 
-fName = ['results\KFGPres ',strrep(datestr(datetime),':','-'),'.mat'];
-save(fName);
+basePerc = 100*mean(fValBaseline)/mean(fValOmni);
+mpcPerc = 100*mean(fValKFGP)/mean(fValOmni);
+fprintf('du exp baseline mpc\n');
+fprintf('%0.0f & %.0f & %.2f & %.2f\n',...
+    [duMax mpckfgp.explorationConstant basePerc mpcPerc]);
+
+% fName = ['results\KFGPres ',strrep(datestr(datetime),':','-'),'.mat'];
+% save(fName);
 
 %% plot the data
-% look at objective function values at each step of MPC
-figure
+cols = [228,26,28
+    77,175,74
+    55,126,184]/255;
 
-spOpt = gobjects;
-spOpt(1) = subplot(1,3,1);
-plot(1:nMPC,jObjBF,'-o')
-grid on;hold on
-plot(1:nMPC,jObjFmin,'-o')
-legend('BF','FMINCON')
-xlabel('MPC step');
-ylabel('$J_{total}$')
+spIdx = 1;
+spAxes = gobjects;
+spObj = gobjects;
+
+lwd = 1.2;
+
+% plot elevation angle trajectory
+pIdx = 1;
+spAxes(spIdx) = subplot(3,1,spIdx);
+hold(spAxes(spIdx),'on');
+ylabel(spAxes(spIdx),'$\mathbf{\gamma_{sp}}$ \textbf{[deg]}','fontweight','bold');
+spObj(pIdx) = stairs(tSamp,omniElev...
+    ,'-'...
+    ,'color',cols(pIdx,:)...
+    ,'MarkerFaceColor',cols(pIdx,:)...
+    ,'linewidth',lwd);
+pIdx = pIdx + 1;
+spObj(pIdx) = plot([tSamp(1) tSamp(end)],baselineElev*[1 1]...
+    ,'-'...
+    ,'color',cols(pIdx,:)...
+    ,'MarkerFaceColor',cols(pIdx,:)...
+    ,'linewidth',lwd);
+pIdx = pIdx + 1;
+spObj(pIdx) = stairs(tSamp,KFGPElev...
+    ,'-'...
+    ,'color',cols(pIdx,:)...
+    ,'MarkerFaceColor',cols(pIdx,:)...
+    ,'linewidth',lwd);
+
+% plot instantaenuos jExploit
+spIdx = spIdx + 1;
+spAxes(spIdx) = subplot(3,1,spIdx);
+pIdx = 1;
+hold(spAxes(spIdx),'on');
+ylabel(spAxes(spIdx),'$\mathbf{J_{exploit}(t_{k})}$','fontweight','bold');
+spObj(pIdx) = plot(tSamp,fValOmni...
+    ,'-'...
+    ,'color',cols(pIdx,:)...
+    ,'MarkerFaceColor',cols(pIdx,:)...
+    ,'linewidth',lwd);
+pIdx = pIdx + 1;
+spObj(pIdx) = plot(tSamp,fValBaseline...
+    ,'-'...
+    ,'color',cols(pIdx,:)...
+    ,'MarkerFaceColor',cols(pIdx,:)...
+    ,'linewidth',lwd);
+pIdx = pIdx + 1;
+spObj(pIdx) = plot(tSamp,fValKFGP...
+    ,'-'...
+    ,'color',cols(pIdx,:)...
+    ,'MarkerFaceColor',cols(pIdx,:)...
+    ,'linewidth',lwd);
+
+% plot running average j_exploit
+spIdx = spIdx + 1;
+spAxes(spIdx) = subplot(3,1,spIdx);
+pIdx = 1;
+hold(spAxes(spIdx),'on');
+ylabel(spAxes(spIdx),'\textbf{Avg.} $\mathbf{J_{exploit}}$','fontweight','bold');
+spObj(pIdx) = plot(tSamp,runAvgOmni...
+    ,'-'...
+    ,'color',cols(pIdx,:)...
+    ,'MarkerFaceColor',cols(pIdx,:)...
+    ,'linewidth',lwd);
+pIdx = pIdx + 1;
+spObj(pIdx) = plot(tSamp,runAvgbaseline...
+    ,'-'...
+    ,'color',cols(pIdx,:)...
+    ,'MarkerFaceColor',cols(pIdx,:)...
+    ,'linewidth',lwd);
+pIdx = pIdx + 1;
+spObj(pIdx) = plot(tSamp,runAvgKFGP...
+    ,'-'...
+    ,'color',cols(pIdx,:)...
+    ,'MarkerFaceColor',cols(pIdx,:)...
+    ,'linewidth',lwd);
+legend('Omniscient','Baseline','MPC','location','bestoutside'...
+    ,'orientation','horizontal')
+
+% axes props
+grid(spAxes(1:end),'on');
+set(spAxes(1:end),'GridLineStyle',':')
+xlabel(spAxes(1:end),'\textbf{Time [min]}','fontweight','bold');   
+set(spAxes(1:end),'FontSize',12);
+% spAxes(1).YTick = linspace(spAxes(1).YTick(1),spAxes(1).YTick(end),3);
+% spAxes(2).YTick = linspace(spAxes(2).YTick(1),spAxes(2).YTick(end),3);
+set(gcf,'InnerPosition',1*[-00 -00 560 1.8*420])
+
+spAxes(1).YLabel.Position(1) = spAxes(2).YLabel.Position(1);
+spAxes(3).YLabel.Position(1) = spAxes(2).YLabel.Position(1);
+
+%%
+saveFile = input('Save file? Options: Enter y or n\n','s');
+if strcmpi(saveFile,'y')
+filName = strcat('ctrlRes_',strrep(datestr(datetime),':','-'));
+save(filName);
+savefig(filName);
+exportgraphics(gcf,[filName,'.png'],'Resolution',600)
+end
 
 
-spOpt(2) = subplot(1,3,2);
-plot(1:nMPC,jExploitBF,'-o')
-grid on;hold on
-plot(1:nMPC,jExploitFmin,'-o')
-legend('BF','FMINCON')
-xlabel('MPC step');
-ylabel('$J_{exploit}$')
-
-
-spOpt(3) = subplot(1,3,3);
-plot(1:nMPC,jExploreBF,'-o')
-grid on;hold on
-plot(1:nMPC,jExploreFmin,'-o')
-legend('BF','FMINCON')
-xlabel('MPC step');
-ylabel('$J_{explore}$')
-
-linkaxes(spOpt(1:3),'x')
-
-sgtitle('Optimization algorithms comparisons')
-
-
-% fval plots
-fvalPlot = gobjects;
-legendStrs = {'Omniscient unconstrained','Baseline','KFGP constrained'};
-
-figure
-subplot(1,2,1)
-fvalPlot(1) = plot(0:nSamp-1,fValOmni,'linewidth',1);
-grid on;hold on
-fvalPlot(2) = plot(0:nSamp-1,fValBaseline,'linewidth',1);
-fvalPlot(3) = plot(0:nSamp-1,fValKFGP,'linewidth',1);
-legend(fvalPlot(1:3),legendStrs);
-xlabel('Time step');
-ylabel('$(v_{f} cos(\phi))^3$')
-
-
-subplot(1,2,2)
-elevPlots = gobjects;
-elevPlots(1) = stairs(0:nSamp-1,omniElev,'linewidth',1);
-grid on;hold on
-elevPlots(2) = plot([0 nSamp-1],baselineElev*[1 1],'linewidth',1);
-elevPlots(3) = stairs(0:nSamp-1,KFGPElev,'linewidth',1);
-legend(elevPlots(1:3),legendStrs);
-xlabel('Time step');
-ylabel('$\phi$')
-sgtitle(sprintf('MPC triggered every %d steps',mpckfgpTimeStep/kfgpTimeStep));
-
-set(findobj('-property','FontSize'),'FontSize',11);
 
 %% animation
-figure
-F = animatedPlot(synFlow,synAlt,'plotTimeStep',0.25,...
-    'regressionResults',regressionRes...
-    ,'waitforbutton',false);
+% figure
+% F = animatedPlot(synFlow,synAlt,'plotTimeStep',0.25,...
+%     'regressionResults',regressionRes...
+%     ,'waitforbutton',false);
 
 
