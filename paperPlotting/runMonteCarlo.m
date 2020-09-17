@@ -145,16 +145,23 @@ runAvgKFGP   = nan(1,nSamp);
 
 
 %% monte carlo setup
-nDataSets = 10;
+nDataSets = 5;
 rngSeeds = randi(100,[nDataSets,1]);
 
 % mobility study
-duMaxSweep = 2:2:20;
-betaSweep  = 0:25:300;
+duMaxSweep = 2:10:20;
+betaSweep  = 0:100:300;
 
 [DUMAX,BETA] = meshgrid(duMaxSweep,betaSweep);
+KFGPFVAL     = nan*DUMAX;
+
+moteCarloRes.omniscient = nan(1,1,nDataSets);
+moteCarloRes.baseline   = nan(1,1,nDataSets);
+moteCarloRes.kfgpMPC    = nan(size(DUMAX,1),size(DUMAX,2),nDataSets);
+
 
 for cc = 1:nDataSets
+    
     rng(rngSeeds(cc));
     
     % get the time series object
@@ -175,6 +182,8 @@ for cc = 1:nDataSets
         omniElev(oo) = elevsAtAllAlts(omniIdx);
     end
     
+    moteCarloRes.omniscient(cc) = mean(fValOmni);
+    
     %% baseline
     baselineElev   = ceil(mean(omniElev));
     baselineAlt    = mpckfgp.tetherLength*sind(baselineElev);
@@ -187,6 +196,9 @@ for cc = 1:nDataSets
         fValBaseline(bb) = cosineFlowCubed(interp1(hData,fData,baselineAlt),cosd(baselineElev));
         runAvgbaseline(bb) = mean(fValBaseline(1:bb));
     end
+    
+    moteCarloRes.baseline(cc) = mean(fValBaseline);
+
     
     %% do the regresson
     for mm = 1:numel(DUMAX)
@@ -271,27 +283,27 @@ for cc = 1:nDataSets
             
         end
         
+        KFGPFVAL(mm) = mean(fValKFGP); 
+        KFGP_OMNI    = mean(fValKFGP)/moteCarloRes.omniscient(cc);
+        
     end
     
+    moteCarloRes.kfgpMPC(:,:,cc) = KFGPFVAL;
+
 end
+
+filName = strcat('monteCarloStruct_',strrep(datestr(datetime),':','-'));
+save(filName,'moteCarloRes','rngSeeds','DUMAX','BETA');
+
 %% convert results to time series and store in strcut
-regressionRes(1).predMean  = timeseries(predMeansKFGP,tSamp*60);
-regressionRes(1).loBound   = timeseries(loBoundKFGP,tSamp*60);
-regressionRes(1).upBound   = timeseries(upBoundKFGP,tSamp*60);
-regressionRes(1).dataSamp  = timeseries([xSamp;flowVal'],tSamp*60);
-regressionRes(1).dataAlts  = synAlt;
-regressionRes(1).legend    = 'KFGP';
+AVG_VALS.KFGP = mean(moteCarloRes.kfgpMPC,3);
+AVG_VALS.OMNI = mean(moteCarloRes.omniscient);
+AVG_VALS.BASE = mean(moteCarloRes.baseline);
 
-meanVals = [mean(fValOmni) mean(fValBaseline) mean(fValKFGP)];
+PERC_VALS.KFGP_OMNI = mean(moteCarloRes.kfgpMPC./moteCarloRes.omniscient,3);
+PERC_VALS.KFGP_BASE = mean(moteCarloRes.kfgpMPC./moteCarloRes.baseline,3);
 
-basePerc = 100*mean(fValBaseline)/mean(fValOmni);
-mpcPerc = 100*mean(fValKFGP)/mean(fValOmni);
-fprintf('du exp baseline mpc\n');
-fprintf('%0.0f & %.0f & %.2f & %.2f\n',...
-    [duMax mpckfgp.explorationConstant basePerc mpcPerc]);
-
-% fName = ['results\KFGPres ',strrep(datestr(datetime),':','-'),'.mat'];
-% save(fName);
+contourf(DUMAX,BETA,PERC_VALS.KFGP_OMNI);
 
 %% plot the data
 cols = [228,26,28
