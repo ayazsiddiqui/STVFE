@@ -48,6 +48,13 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
             xDomainNP = size(obj.xMeasure,2);
             % switch cases
             if isequal(@ExponentialKernel,obj.temporalKernel)
+                tempKernel = 'exponential';
+            elseif isequal(@SquaredExponentialKernel,obj.temporalKernel)
+                tempKernel = 'squaredExponential';
+            end
+               
+            switch tempKernel
+                case 'exponential'
                 % % calculate F,H,Q as per Carron Eqn. (14)
                 F = exp(-timeStep/obj.temporalLengthScale);
                 H = sqrt(2/obj.temporalLengthScale);
@@ -63,6 +70,8 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
                 val.sig0Mat = eye(xDomainNP)*sigma0;
                 val.s0      = zeros(xDomainNP,1);
                 
+                case 'squaredExponential'
+                x = 1;
             end
         end
         

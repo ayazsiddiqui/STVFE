@@ -14,7 +14,7 @@ kfgpTimeStep = 0.05;
 
 % spatial kernel
 
-kfgp = GP.KalmanFilteredGaussianProcess('squaredExponential','exponential',...
+kfgp = GP.KalmanFilteredGaussianProcess('squaredExponential','squaredExponential',...
     'windPowerLaw',altitudes,kfgpTimeStep);
 
 kfgp.spatialCovAmp       = 5.1^2;
