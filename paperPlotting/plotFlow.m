@@ -1,6 +1,6 @@
 clear
 clc
-close all
+% close all
 
 cd(fileparts(mfilename('fullpath')));
 load('envFile');
@@ -14,7 +14,7 @@ gp = GP.GaussianProcess('squaredExponential','exponential','windPowerLaw');
 gp.spatialCovAmp       = 5.1^2;
 gp.spatialLengthScale  = 220;
 gp.temporalCovAmp      = 1;
-gp.temporalLengthScale = 20;
+gp.temporalLengthScale = 44;
 gp.noiseVariance       = 1e-3;
 
 %% generate synthetic flow data
