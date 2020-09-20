@@ -13,7 +13,7 @@ altitudes = 0:10:100;
 kfgpTimeStep = 0.25;
 
 % make class object
-kfgp = GP.KalmanFilteredGaussianProcess('squaredExponential','exponential',...
+kfgp = GP.KalmanFilteredGaussianProcess('squaredExponential','squaredExponential',...
     'zeroMean',altitudes,kfgpTimeStep);
 
 kfgp.spatialCovAmp       = 1;

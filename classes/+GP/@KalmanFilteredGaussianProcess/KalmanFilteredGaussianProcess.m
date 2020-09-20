@@ -52,26 +52,13 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
             elseif isequal(@SquaredExponentialKernel,obj.temporalKernel)
                 tempKernel = 'squaredExponential';
             end
-               
+            
             switch tempKernel
                 case 'exponential'
-                % % calculate F,H,Q as per Carron Eqn. (14)
-                F = exp(-timeStep/obj.temporalLengthScale);
-                H = sqrt(2/obj.temporalLengthScale);
-                G = 1;
-                Q = (1 - exp(-2*timeStep/obj.temporalLengthScale))...
-                    /(2/obj.temporalLengthScale);
-                % % solve the Lyapunov equation for X
-                sigma0 = lyap(F,G*G');
-                % % outputs
-                val.Amat    = eye(xDomainNP)*F;
-                val.Hmat    = eye(xDomainNP)*H;
-                val.Qmat    = eye(xDomainNP)*Q;
-                val.sig0Mat = eye(xDomainNP)*sigma0;
-                val.s0      = zeros(xDomainNP,1);
-                
+                    val = initializeKFGPForExponentialKernel(obj);
+                    
                 case 'squaredExponential'
-                x = 1;
+                    val = initializeKFGPForSquaredExponentialKernel(obj);
             end
         end
         
@@ -158,7 +145,7 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
             noXP = size(xPredict,2);
             % Regression as per section 5 of Todescato journal paper
             % preallocate matrices
-            mXstar   = NaN(noXP,1);            
+            mXstar   = NaN(noXP,1);
             % pre-allocate matrices
             kx_xstar     = NaN(noXM,noXP);
             kxstar_xstar = NaN(noXP,1);
@@ -169,7 +156,7 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
                         xPredict(:,ii),obj.xMeasure(:,jj));
                 end
                 kxstar_xstar(ii) = obj.calcSpatialCovariance(...
-                        xPredict(:,ii),xPredict(:,ii));
+                    xPredict(:,ii),xPredict(:,ii));
                 mXstar(ii) = obj.meanFunction(xPredict(:,ii));
                 
             end
@@ -180,7 +167,7 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
             postVar  = kxstar_xstar - ...
                 diag(kInvK*(eye(noXM)*kx_xstar - sigF_t*kInvK'));
         end
-
+        
         
     end
     
@@ -228,7 +215,7 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
                 [F_t,sigF_t,skp1_kp1,ckp1_kp1] = ...
                     obj.calcKalmanStateEstimates(sk_k,ck_k,Mk(ii),...
                     []);
-
+                
             end
             % mpc objective function val
             val = sum(aqVal);

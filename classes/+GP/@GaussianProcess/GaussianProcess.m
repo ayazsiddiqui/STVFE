@@ -80,7 +80,7 @@ classdef GaussianProcess
     methods (Access = protected)
         % check kernel choice validity
         function val = checkKernelValidity(obj,ipKernel)
-            if ismember(ipKernel,obj.kernelChoices)
+            if ismember(lower(ipKernel),lower(obj.kernelChoices))
                 val = ipKernel;
             else
                 error(['Only ',repmat('%s, ',1,numel(obj.kernelChoices)-1),...
@@ -88,12 +88,12 @@ classdef GaussianProcess
                     ' You entered %s.'],obj.kernelChoices{:},ipKernel);
             end
             % set values
-            switch ipKernel
+            switch lower(ipKernel)
                 case 'exponential'
                     val = @ExponentialKernel;
-                case 'squaredExponential'
+                case 'squaredexponential'
                     val = @SquaredExponentialKernel;
-                case 'alwaysOne'
+                case 'alwaysone'
                     val = @alwaysOneCovarianceKernel;
             end
         end
