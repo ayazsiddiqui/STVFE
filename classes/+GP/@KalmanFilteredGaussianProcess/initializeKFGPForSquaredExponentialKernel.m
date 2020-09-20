@@ -10,15 +10,16 @@ l_t = obj.temporalLengthScale;
 % total number of points in the entire domain of interest
 nXD = size(obj.xMeasure,2);
 % taylor series expansion order
-N = 4;
+N = 1;
 
 % % find the transfer function as per the Hartinkainen paper
 syms x
 px = 0;
 % % Hartinkainen paper Eqn. (11)
+k = 1/(2*l_t^2);
+
 for n = 0:N
-    px = px + ((x^(2*n))*factorial(N)*((-1)^n)*...
-        (2/(l_t^2))^(N-n))/factorial(n);
+    px = px + (factorial(N)*((-1)^n)*((4*k)^(N-n))*(x^(2*n)))/factorial(n);
 end
 % % find the roots of the above polynomial
 rts = vpasolve(px,x);

@@ -9,7 +9,7 @@ load('envFile');
 %% initialize GP
 % rng(1);
 
-gp = GP.GaussianProcess('squaredExponential','exponential','windPowerLaw');
+gp = GP.GaussianProcess('squaredExponential','Exponential','windPowerLaw');
 
 gp.spatialCovAmp       = 5.1^2;
 gp.spatialLengthScale  = 220;
