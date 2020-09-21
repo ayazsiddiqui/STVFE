@@ -6,22 +6,23 @@ cd(fileparts(mfilename('fullpath')));
 
 
 %% initialize KFGP
-rng(5);
+rng(8);
 
 % altitudes
 altitudes = 0:100:1000;
-kfgpTimeStep = 0.05;
+kfgpTimeStep = 0.2;
 
 % spatial kernel
 spaceKernel = 'squaredExponential';
 timeKernel  = 'squaredExponential';
+
 kfgp = GP.KalmanFilteredGaussianProcess(spaceKernel,timeKernel,...
     'windPowerLaw',altitudes,kfgpTimeStep);
 
 kfgp.spatialCovAmp       = 5.1^2;
 kfgp.spatialLengthScale  = 220;
 kfgp.temporalCovAmp      = 1;
-kfgp.temporalLengthScale = 20;
+kfgp.temporalLengthScale = 22;
 kfgp.noiseVariance       = 1e-3;
 
 kfgp.initVals = kfgp.initializeKFGP;
@@ -32,22 +33,22 @@ kfgp.spatialCovMatRoot = kfgp.calcSpatialCovMatRoot;
 % number of altitudes
 nAlt = numel(altitudes);
 % final time for data generation in minutes
-tFinData = 120;
+tFinData = 300;
 % time step for synthetic data generation
-timeStepSynData = 1;
+timeStepSynData = 3;
 % standard deviation for synthetic data generation
 stdDevSynData = 4;
 % get the time series object
 [synFlow,synAlt] = kfgp.generateSyntheticFlowData(altitudes,tFinData,stdDevSynData,...
     'timeStep',timeStepSynData);
 
-axisObj = paperFlowPlot(synFlow,altitudes,10,60);
+axisObj = paperFlowPlot(synFlow,altitudes,30,180);
 keyboard
 close
 
 %% regression using KFGP
 % algorithm final time
-algFinTime = 60;
+algFinTime = 180;
 % sampling time vector
 tSamp = 0:kfgp.kfgpTimeStep:algFinTime;
 % number of samples
@@ -71,7 +72,7 @@ numStdDev = 1;
 
 %% initialize MPC KFGP
 % mpc time step
-mpckfgpTimeStep = 1;
+mpckfgpTimeStep = 3;
 % mpc prediction horizon
 predictionHorz  = 6;
 % fmincon options
@@ -98,7 +99,7 @@ mpckfgp.explorationConstant  = 150;
 mpckfgp.predictionHorizon    = predictionHorz;
 
 % max mean elevation angle step size
-duMax = 2;
+duMax = 5;
 Astep = zeros(predictionHorz-1,predictionHorz);
 bstep = duMax*ones(2*(predictionHorz-1),1);
 for ii = 1:predictionHorz-1
@@ -275,7 +276,6 @@ for ii = 1:nSamp
         jj = jj+1;
     end
     
-    
 end
 
 
@@ -309,25 +309,26 @@ spAxes = gobjects;
 spObj = gobjects;
 
 lwd = 1.2;
+tSampPlot = tSamp/60;
 
 % plot elevation angle trajectory
 pIdx = 1;
 spAxes(spIdx) = subplot(3,1,spIdx);
 hold(spAxes(spIdx),'on');
-ylabel(spAxes(spIdx),'$\mathbf{\gamma_{sp}}$ \textbf{[deg]}','fontweight','bold');
-spObj(pIdx) = stairs(tSamp,omniElev...
+ylabel(spAxes(spIdx),'$\mathbf{\theta_{sp}}$ \textbf{[deg]}','fontweight','bold');
+spObj(pIdx) = stairs(tSampPlot,omniElev...
     ,'-'...
     ,'color',cols(pIdx,:)...
     ,'MarkerFaceColor',cols(pIdx,:)...
     ,'linewidth',lwd);
 pIdx = pIdx + 1;
-spObj(pIdx) = plot([tSamp(1) tSamp(end)],baselineElev*[1 1]...
+spObj(pIdx) = plot([tSampPlot(1) tSampPlot(end)],baselineElev*[1 1]...
     ,'-'...
     ,'color',cols(pIdx,:)...
     ,'MarkerFaceColor',cols(pIdx,:)...
     ,'linewidth',lwd);
 pIdx = pIdx + 1;
-spObj(pIdx) = stairs(tSamp,KFGPElev...
+spObj(pIdx) = stairs(tSampPlot,KFGPElev...
     ,'-'...
     ,'color',cols(pIdx,:)...
     ,'MarkerFaceColor',cols(pIdx,:)...
@@ -339,19 +340,19 @@ spAxes(spIdx) = subplot(3,1,spIdx);
 pIdx = 1;
 hold(spAxes(spIdx),'on');
 ylabel(spAxes(spIdx),'$\mathbf{J_{exploit}(t_{k})}$','fontweight','bold');
-spObj(pIdx) = plot(tSamp,fValOmni...
+spObj(pIdx) = plot(tSampPlot,fValOmni...
     ,'-'...
     ,'color',cols(pIdx,:)...
     ,'MarkerFaceColor',cols(pIdx,:)...
     ,'linewidth',lwd);
 pIdx = pIdx + 1;
-spObj(pIdx) = plot(tSamp,fValBaseline...
+spObj(pIdx) = plot(tSampPlot,fValBaseline...
     ,'-'...
     ,'color',cols(pIdx,:)...
     ,'MarkerFaceColor',cols(pIdx,:)...
     ,'linewidth',lwd);
 pIdx = pIdx + 1;
-spObj(pIdx) = plot(tSamp,fValKFGP...
+spObj(pIdx) = plot(tSampPlot,fValKFGP...
     ,'-'...
     ,'color',cols(pIdx,:)...
     ,'MarkerFaceColor',cols(pIdx,:)...
@@ -363,19 +364,19 @@ spAxes(spIdx) = subplot(3,1,spIdx);
 pIdx = 1;
 hold(spAxes(spIdx),'on');
 ylabel(spAxes(spIdx),'\textbf{Avg.} $\mathbf{J_{exploit}}$','fontweight','bold');
-spObj(pIdx) = plot(tSamp,runAvgOmni...
+spObj(pIdx) = plot(tSampPlot,runAvgOmni...
     ,'-'...
     ,'color',cols(pIdx,:)...
     ,'MarkerFaceColor',cols(pIdx,:)...
     ,'linewidth',lwd);
 pIdx = pIdx + 1;
-spObj(pIdx) = plot(tSamp,runAvgbaseline...
+spObj(pIdx) = plot(tSampPlot,runAvgbaseline...
     ,'-'...
     ,'color',cols(pIdx,:)...
     ,'MarkerFaceColor',cols(pIdx,:)...
     ,'linewidth',lwd);
 pIdx = pIdx + 1;
-spObj(pIdx) = plot(tSamp,runAvgKFGP...
+spObj(pIdx) = plot(tSampPlot,runAvgKFGP...
     ,'-'...
     ,'color',cols(pIdx,:)...
     ,'MarkerFaceColor',cols(pIdx,:)...
@@ -386,7 +387,7 @@ legend('Omniscient','Baseline','MPC','location','bestoutside'...
 % axes props
 grid(spAxes(1:end),'on');
 set(spAxes(1:end),'GridLineStyle',':')
-xlabel(spAxes(1:end),'\textbf{Time [min]}','fontweight','bold');   
+xlabel(spAxes(1:end),'\textbf{Time [hr]}','fontweight','bold');   
 set(spAxes(1:end),'FontSize',12);
 % spAxes(1).YTick = linspace(spAxes(1).YTick(1),spAxes(1).YTick(end),3);
 % spAxes(2).YTick = linspace(spAxes(2).YTick(1),spAxes(2).YTick(end),3);

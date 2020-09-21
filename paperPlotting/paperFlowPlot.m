@@ -1,8 +1,8 @@
-function axisObj = paperFlowPlot(synFlow,altitudes,endTime)
+function axisObj = paperFlowPlot(synFlow,altitudes,timeStep,endTime)
 
 %% process data
 % plot struct
-P.plotTimeStep = 10;
+P.plotTimeStep = timeStep;
 P.endTime      = endTime;
 P.xlimRes      = 2;
 cols = [228,26,28
@@ -47,7 +47,7 @@ set(gcf,'InnerPosition',1*[-0 -0 560 420])
 %% plot the data
 fPlots = gobjects;
 for ii = 1:length(tVec)
-    legStr{ii} = strcat(num2str(tVec(ii)/60),' min');
+    legStr{ii} = strcat(num2str(tVec(ii)/3600,'%.1f'),' hrs');
     fPlots(ii) = plot(flowTs.Data(:,:,ii),altitudes...
         ,P.linProp{ii,2}...
         ,'color',P.linProp{ii,1}...
