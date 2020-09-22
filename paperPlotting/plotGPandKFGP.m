@@ -10,16 +10,18 @@ rng(1);
 
 % altitudes
 altitudes = 0:100:1000;
-kfgpTimeStep = 0.1;
+kfgpTimeStep = 0.3;
 
 % make class object
-kfgp = GP.KalmanFilteredGaussianProcess('squaredExponential','exponential',...
+spKernel = 'squaredExponential';
+tKernel  = 'squaredExponential';
+kfgp = GP.KalmanFilteredGaussianProcess(spKernel,tKernel,...
     'windPowerLaw',altitudes,kfgpTimeStep);
 
 kfgp.spatialCovAmp       = 5.1^2;
 kfgp.spatialLengthScale  = 220;
 kfgp.temporalCovAmp      = 1;
-kfgp.temporalLengthScale = 20;
+kfgp.temporalLengthScale = 22;
 kfgp.noiseVariance       = 1e-3;
 
 kfgp.initVals = kfgp.initializeKFGP;
@@ -28,7 +30,7 @@ kfgp.spatialCovMatRoot = kfgp.calcSpatialCovMatRoot;
 
 
 % guassian process
-gp = GP.GaussianProcess('squaredExponential','exponential','zeroMean');
+gp = GP.GaussianProcess(spKernel,tKernel,'windPowerLaw');
 
 gp.spatialCovAmp       = kfgp.spatialCovAmp;
 gp.spatialLengthScale  = kfgp.spatialLengthScale;
@@ -37,7 +39,7 @@ gp.temporalLengthScale = kfgp.temporalLengthScale;
 gp.noiseVariance       = kfgp.noiseVariance;
 
 %% generate synthetic flow data
-gp2 = GP.GaussianProcess('squaredExponential','exponential','windPowerLaw');
+gp2 = GP.GaussianProcess(spKernel,tKernel,'windPowerLaw');
 gp2.spatialCovAmp       = kfgp.spatialCovAmp;
 gp2.spatialLengthScale  = kfgp.spatialLengthScale;
 gp2.temporalCovAmp      = kfgp.temporalCovAmp;
@@ -46,7 +48,7 @@ gp2.noiseVariance       = kfgp.noiseVariance;
 % number of altitudes
 nAlt = numel(altitudes);
 % final time for data generation in minutes
-tFinData = 120;
+tFinData = 300;
 % time step for synthetic data generation
 timeStepSynData = 1;
 % standard deviation for synthetic data generation
@@ -57,7 +59,7 @@ stdDevSynData = 4;
 
 %% regression using traditional GP
 % algorithm final time
-algFinTime = 60;
+algFinTime = 180;
 % sampling time vector
 tSamp = 0:kfgp.kfgpTimeStep:algFinTime;
 % number of samples
@@ -194,6 +196,7 @@ P.linProp = {...
     cols(6,:),'-s';
     cols(7,:),'-d'};
 
+tSampPlot = tSamp/60;
 
 % create axis object
 nSp = 1;
@@ -201,7 +204,7 @@ sbAxis(nSp) = subplot(2,1,nSp);
 % set axis properties
 hold(sbAxis(nSp),'on');
 ylabel(sbAxis(nSp),'\textbf{Fit [\%]}','fontweight','bold');
-fPlots(1) = plot(tSamp,100*kfgpToGpFit...
+fPlots(1) = plot(tSampPlot,100*kfgpToGpFit...
        ,P.linProp{1,2}...
        ,'color','k'...
        ,'MarkerFaceColor',P.linProp{1,1}...
@@ -210,7 +213,7 @@ fPlots(1) = plot(tSamp,100*kfgpToGpFit...
 nSp = nSp + 1;
 sbAxis(nSp) = subplot(2,1,nSp);
 
-fPlots(2) = semilogy(tSamp,timeGP...
+fPlots(2) = semilogy(tSampPlot,timeGP...
        ,P.linProp{1,2}...
        ,'color',P.linProp{1,1}...
        ,'MarkerFaceColor',P.linProp{2,1}...
@@ -219,7 +222,7 @@ fPlots(2) = semilogy(tSamp,timeGP...
 hold(sbAxis(nSp),'on');
 ylabel(sbAxis(nSp),'\textbf{Computation time [s]}','fontweight','bold');
 
-fPlots(2) = semilogy(tSamp,timeKFGP...
+fPlots(2) = semilogy(tSampPlot,timeKFGP...
        ,P.linProp{1,2}...
        ,'color',P.linProp{2,1}...
        ,'MarkerFaceColor',P.linProp{4,1}...
@@ -227,7 +230,7 @@ fPlots(2) = semilogy(tSamp,timeKFGP...
 
 grid(sbAxis(1:end),'on');
 set(sbAxis(1:end),'GridLineStyle',':')
-xlabel(sbAxis(1:end),'\textbf{Time [min]}','fontweight','bold');   
+xlabel(sbAxis(1:end),'\textbf{Time [hrs]}','fontweight','bold');   
 sbAxis(1).YLim = [60 110];
 
 set(sbAxis(1:end),'FontSize',12);
