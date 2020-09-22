@@ -9,18 +9,18 @@ cd(fileparts(mfilename('fullpath')));
 rng(1);
 
 % altitudes
-altitudes = 0:10:100;
-kfgpTimeStep = 0.25;
+altitudes = 0:100:1000;
+kfgpTimeStep = 0.1;
 
 % make class object
 kfgp = GP.KalmanFilteredGaussianProcess('squaredExponential','squaredExponential',...
     'zeroMean',altitudes,kfgpTimeStep);
 
 kfgp.spatialCovAmp       = 1;
-kfgp.spatialLengthScale  = 20;
+kfgp.spatialLengthScale  = 220;
 kfgp.temporalCovAmp      = 1;
-kfgp.temporalLengthScale = 10;
-kfgp.noiseVariance       = 1e-3;
+kfgp.temporalLengthScale = 22;
+kfgp.noiseVariance       = 0.1;
 
 kfgp.initVals = kfgp.initializeKFGP;
 kfgp.spatialCovMat = kfgp.makeSpatialCovarianceMatrix(altitudes);
@@ -28,7 +28,7 @@ kfgp.spatialCovMatRoot = kfgp.calcSpatialCovMatRoot;
 
 
 % guassian process
-gp = GP.GaussianProcess('squaredExponential','exponential','zeroMean');
+gp = GP.GaussianProcess('squaredExponential','squaredExponential','zeroMean');
 
 gp.spatialCovAmp       = kfgp.spatialCovAmp;
 gp.spatialLengthScale  = kfgp.spatialLengthScale;
@@ -37,7 +37,7 @@ gp.temporalLengthScale = kfgp.temporalLengthScale;
 gp.noiseVariance       = kfgp.noiseVariance;
 
 %% generate synthetic flow data
-gp2 = GP.GaussianProcess('squaredExponential','exponential','windPowerLaw');
+gp2 = GP.GaussianProcess('squaredExponential','squaredExponential','windPowerLaw');
 gp2.spatialCovAmp       = kfgp.spatialCovAmp;
 gp2.spatialLengthScale  = kfgp.spatialLengthScale;
 gp2.temporalCovAmp      = kfgp.temporalCovAmp;
@@ -53,7 +53,7 @@ timeStepSynData = 1;
 stdDevSynData = 1;
 % get the time series object
 [synFlow,synAlt] = gp2.generateSyntheticFlowData(altitudes,tFinData,stdDevSynData,...
-    'timeStep',timeStepSynData,'temporalLengthScale',1);
+    'timeStep',timeStepSynData);
 
 %% regression using traditional GP
 % algorithm final time

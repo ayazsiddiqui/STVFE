@@ -10,7 +10,7 @@ l_t = obj.temporalLengthScale;
 % total number of points in the entire domain of interest
 nXD = size(obj.xMeasure,2);
 % taylor series expansion order
-N = 1;
+N = 6;
 
 % % find the transfer function as per the Hartinkainen paper
 syms x

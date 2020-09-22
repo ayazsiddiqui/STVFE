@@ -14,15 +14,15 @@ kfgpTimeStep = 0.3;
 
 % make class object
 spKernel = 'squaredExponential';
-tKernel  = 'squaredExponential';
+tKernel  = 'exponential';
 kfgp = GP.KalmanFilteredGaussianProcess(spKernel,tKernel,...
-    'windPowerLaw',altitudes,kfgpTimeStep);
+    'zeroMean',altitudes,kfgpTimeStep);
 
 kfgp.spatialCovAmp       = 5.1^2;
 kfgp.spatialLengthScale  = 220;
 kfgp.temporalCovAmp      = 1;
 kfgp.temporalLengthScale = 22;
-kfgp.noiseVariance       = 1e-3;
+kfgp.noiseVariance       = 0.1;
 
 kfgp.initVals = kfgp.initializeKFGP;
 kfgp.spatialCovMat = kfgp.makeSpatialCovarianceMatrix(altitudes);
@@ -30,7 +30,7 @@ kfgp.spatialCovMatRoot = kfgp.calcSpatialCovMatRoot;
 
 
 % guassian process
-gp = GP.GaussianProcess(spKernel,tKernel,'windPowerLaw');
+gp = GP.GaussianProcess(spKernel,tKernel,'zeroMean');
 
 gp.spatialCovAmp       = kfgp.spatialCovAmp;
 gp.spatialLengthScale  = kfgp.spatialLengthScale;
@@ -55,7 +55,7 @@ timeStepSynData = 1;
 stdDevSynData = 4;
 % get the time series object
 [synFlow,synAlt] = gp2.generateSyntheticFlowData(altitudes,tFinData,stdDevSynData,...
-    'timeStep',timeStepSynData,'temporalLengthScale',1);
+    'timeStep',timeStepSynData);
 
 %% regression using traditional GP
 % algorithm final time
@@ -230,7 +230,7 @@ fPlots(2) = semilogy(tSampPlot,timeKFGP...
 
 grid(sbAxis(1:end),'on');
 set(sbAxis(1:end),'GridLineStyle',':')
-xlabel(sbAxis(1:end),'\textbf{Time [hrs]}','fontweight','bold');   
+xlabel(sbAxis(1:end),'\textbf{Time [hr]}','fontweight','bold');   
 sbAxis(1).YLim = [60 110];
 
 set(sbAxis(1:end),'FontSize',12);
@@ -264,7 +264,7 @@ regressionRes(2).legend    = 'GP';
 
 %% plot the data
 figure
-F = animatedPlot(synFlow,synAlt,'plotTimeStep',1,...
+F = animatedPlot(synFlow,synAlt,'plotTimeStep',kfgpTimeStep,...
     'regressionResults',regressionRes,'wait',true);
 
 
