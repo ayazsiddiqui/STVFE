@@ -6,7 +6,7 @@ cd(fileparts(mfilename('fullpath')));
 
 
 %% initialize KFGP
-rng(8);
+rng(6);
 
 % altitudes
 altitudes = 0:100:1000;
@@ -408,9 +408,9 @@ end
 
 
 %% animation
-% figure
-% F = animatedPlot(synFlow,synAlt,'plotTimeStep',0.25,...
-%     'regressionResults',regressionRes...
-%     ,'waitforbutton',false);
+figure
+F = animatedPlot(synFlow,synAlt,'plotTimeStep',0.25,...
+    'regressionResults',regressionRes...
+    ,'waitforbutton',false);
 
 
