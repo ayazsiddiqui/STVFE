@@ -1,6 +1,6 @@
 clear
 clc
-close all
+% close all
 
 cd(fileparts(mfilename('fullpath')));
 
@@ -14,7 +14,7 @@ kfgpTimeStep = 0.3;
 
 % make class object
 spKernel = 'squaredExponential';
-tKernel  = 'exponential';
+tKernel  = 'squaredExponential';
 kfgp = GP.KalmanFilteredGaussianProcess(spKernel,tKernel,...
     'zeroMean',altitudes,kfgpTimeStep);
 

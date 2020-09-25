@@ -6,7 +6,7 @@ cd(fileparts(mfilename('fullpath')));
 
 
 %% initialize KFGP
-rng(6);
+rng(8);
 
 % altitudes
 altitudes = 0:100:1000;
@@ -33,7 +33,7 @@ kfgp.spatialCovMatRoot = kfgp.calcSpatialCovMatRoot;
 % number of altitudes
 nAlt = numel(altitudes);
 % final time for data generation in minutes
-tFinData = 300;
+tFinData = 600;
 % time step for synthetic data generation
 timeStepSynData = 3;
 % standard deviation for synthetic data generation
@@ -48,7 +48,7 @@ close
 
 %% regression using KFGP
 % algorithm final time
-algFinTime = 180;
+algFinTime = 300;
 % sampling time vector
 tSamp = 0:kfgp.kfgpTimeStep:algFinTime;
 % number of samples
@@ -95,11 +95,11 @@ mpckfgp.tetherLength        = 1000;
 
 % acquistion function parameters
 mpckfgp.exploitationConstant = 1;
-mpckfgp.explorationConstant  = 150;
+mpckfgp.explorationConstant  = 2^6;
 mpckfgp.predictionHorizon    = predictionHorz;
 
 % max mean elevation angle step size
-duMax = 5;
+duMax = 6;
 Astep = zeros(predictionHorz-1,predictionHorz);
 bstep = duMax*ones(2*(predictionHorz-1),1);
 for ii = 1:predictionHorz-1

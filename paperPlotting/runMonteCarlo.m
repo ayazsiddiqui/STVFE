@@ -145,12 +145,12 @@ runAvgKFGP   = nan(1,nSamp);
 
 
 %% monte carlo setup
-nDataSets = 5;
-rngSeeds = randi(100,[nDataSets,1]);
+nDataSets = 100;
+rngSeeds = randi(1e6,[nDataSets,1]);
 
 % mobility study
-duMaxSweep = 2:10:20;
-betaSweep  = 0:100:300;
+duMaxSweep = 2:2:10;
+betaSweep  = 0:1:10;
 
 [DUMAX,BETA] = meshgrid(duMaxSweep,betaSweep);
 KFGPFVAL     = nan*DUMAX;
@@ -203,7 +203,7 @@ for cc = 1:nDataSets
     %% do the regresson
     for mm = 1:numel(DUMAX)
         bstep = DUMAX(mm)*ones(2*(predictionHorz-1),1);
-        mpckfgp.explorationConstant  = BETA(mm);
+        mpckfgp.explorationConstant  = 2^BETA(mm);
         
         % mpc counter
         jj = 1;

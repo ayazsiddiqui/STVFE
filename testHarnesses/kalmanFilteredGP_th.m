@@ -90,7 +90,7 @@ mpckfgp.tetherLength        = 800;
 
 % acquistion function parameters
 mpckfgp.exploitationConstant = 1;
-mpckfgp.explorationConstant  = 150;
+mpckfgp.explorationConstant  = 1;
 mpckfgp.predictionHorizon    = predictionHorz;
 
 % max mean elevation angle step size

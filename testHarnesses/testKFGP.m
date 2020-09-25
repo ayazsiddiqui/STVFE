@@ -6,7 +6,7 @@ fIdx = 1;
 
 %% initailize
 % load vehicle
-load('ayazAirborneVhcl.mat');
+load('ampyxVhcl.mat');
 
 % initialize class
 cIn = maneuverabilityAdvanced(vhcl);
@@ -17,8 +17,14 @@ cIn.vstabOswaldEff  = 0.3;
 
 % tether length
 cIn.tetherLength = 1000;
-cIn.pathWidth    = 16;
-cIn.pathHeight   = 6;
+cIn.pathWidth    = 20;
+cIn.pathHeight   = 12;
+
+% turbine properties
+cIn.turbCP = 0.5;
+cIn.turbCD = 1.5*cIn.turbCP;
+% calculate optimum turbine diameter
+cIn.turbDia = cIn.calcOptTurbDiameter(11*pi/180);
 
 % path parameter and some other constants
 S.nPoints = 41;
@@ -114,7 +120,7 @@ mpckfgp.tetherLength        = cIn.tetherLength;
 
 % acquistion function parameters
 mpckfgp.exploitationConstant = 1;
-mpckfgp.explorationConstant  = 150;
+mpckfgp.explorationConstant  = 1;
 mpckfgp.predictionHorizon    = predictionHorz;
 
 % max mean elevation angle step size
@@ -179,6 +185,7 @@ SR.pathSpeeds     = nan(S.nPoints,nSamp);
 SR.pathRoll       = nan(S.nPoints,nSamp);
 SR.avgSpeed       = nan(1,nSamp);
 SR.avgV_appxCubed = nan(1,nSamp);
+SR.avgPower       = nan(1,nSamp);
 SR.lapTime        = nan(1,nSamp);
 SR.avgAoA         = nan(1,nSamp);
 SR.maxTangentRoll = nan(1,nSamp);
@@ -186,6 +193,7 @@ SR.maxTangentRoll = nan(1,nSamp);
 jj = 1;
 
 %% omniscient
+SRO = SR;
 for ii = 1:nSamp
     % measure flow at xSamp(ii) at tSamp(ii)
     fData = resample(synFlow,tSamp(ii)*60).Data;
@@ -196,12 +204,28 @@ for ii = 1:nSamp
     [fValOmni(ii),omniIdx] = max(cosineFlowCubed(omnifData,cosElevAtAllAlts));
     runAvgOmni(ii) = mean(fValOmni(1:ii));
     omniElev(ii) = elevsAtAllAlts(omniIdx);
+    
+    cIn.meanElevationInRadians = omniElev(ii)*pi/180;
+    solVals = cIn.getAttainableVelocityOverPath(interp1(hData,fData,omniAlts(omniIdx)),...
+        S.tgtPitch,S.pathParam);
+    % calc relevant results
+    SRO.pathSpeeds(:,ii)   = solVals.vH_path;
+    SRO.pathRoll(:,ii)     = solVals.roll_path;
+    SRO.avgSpeed(ii)       = mean(solVals.vH_path);
+    SRO.avgV_appxCubed(ii) = mean(max(0,-solVals.B_Vapp_path(1,:)).^3);
+    SRO.avgPower(ii)       = cIn.turbCP*0.5*cIn.fluidDensity*...
+        SRO.avgV_appxCubed(ii)*cIn.turbArea;
+    SRO.lapTime(ii)        = cIn.pathLength/SRO.avgSpeed(ii);
+    SRO.avgAoA(ii)         = mean(cIn.calcAngleOfAttackInRadians(...
+        solVals.B_Vapp_path))*180/pi;
+    SRO.maxTangentRoll(ii) = max(abs(SRO.pathRoll(:,ii)))*180/pi;
 end
 
 %% baseline
 baselineElev   = ceil(mean(omniElev));
 baselineAlt    = mpckfgp.tetherLength*sind(baselineElev);
 
+SRB = SR;
 for ii = 1:nSamp
     % measure flow at xSamp(ii) at tSamp(ii)
     fData = resample(synFlow,tSamp(ii)*60).Data;
@@ -209,6 +233,21 @@ for ii = 1:nSamp
     % base line
     fValBaseline(ii) = cosineFlowCubed(interp1(hData,fData,baselineAlt),cosd(baselineElev));
     runAvgbaseline(ii) = mean(fValBaseline(1:ii));
+    
+    cIn.meanElevationInRadians = baselineElev*pi/180;
+    solVals = cIn.getAttainableVelocityOverPath(interp1(hData,fData,baselineAlt),...
+        S.tgtPitch,S.pathParam);
+    % calc relevant results
+    SRB.pathSpeeds(:,ii)   = solVals.vH_path;
+    SRB.pathRoll(:,ii)     = solVals.roll_path;
+    SRB.avgSpeed(ii)       = mean(solVals.vH_path);
+    SRB.avgV_appxCubed(ii) = mean(max(0,-solVals.B_Vapp_path(1,:)).^3);
+    SRB.avgPower(ii)       = cIn.turbCP*0.5*cIn.fluidDensity*...
+        SRB.avgV_appxCubed(ii)*cIn.turbArea;
+    SRB.lapTime(ii)        = cIn.pathLength/SRB.avgSpeed(ii);
+    SRB.avgAoA(ii)         = mean(cIn.calcAngleOfAttackInRadians(...
+        solVals.B_Vapp_path))*180/pi;
+    SRB.maxTangentRoll(ii) = max(abs(SRB.pathRoll(:,ii)))*180/pi;
 end
 
 %% do the regresson
@@ -236,10 +275,12 @@ for ii = 1:nSamp
     SR.pathRoll(:,ii)     = solVals.roll_path;
     SR.avgSpeed(ii)       = mean(solVals.vH_path);
     SR.avgV_appxCubed(ii) = mean(max(0,-solVals.B_Vapp_path(1,:)).^3);
-    SR.lapTime(ii)        = allpathLengths(jj)/avgSpeed(jj,ii);
+    SR.avgPower(ii)       = cIn.turbCP*0.5*cIn.fluidDensity*...
+        SR.avgV_appxCubed(ii)*cIn.turbArea;
+    SR.lapTime(ii)        = cIn.pathLength/SR.avgSpeed(ii);
     SR.avgAoA(ii)         = mean(cIn.calcAngleOfAttackInRadians(...
         solVals.B_Vapp_path))*180/pi;
-    SR.maxTangentRoll(ii) = max(abs(pathRoll(jj,:,ii)))*180/pi;
+    SR.maxTangentRoll(ii) = max(abs(SR.pathRoll(:,ii)))*180/pi;
     % augment altitude and height in XTsamp
     XTSamp(:,ii) = [xSamp(ii);tSamp(ii)];
     % recursion
@@ -304,6 +345,17 @@ for ii = 1:nSamp
     
 end
 
+SR.powerRunningAvg = nan(1,nSamp);
+SRO.powerRunningAvg = nan(1,nSamp);
+SRB.powerRunningAvg = nan(1,nSamp);
+
+
+for ii = 1:nSamp
+    SR.powerRunningAvg(ii) = mean(SR.avgPower(1:ii))/1000;
+    SRO.powerRunningAvg(ii) =  mean(SRO.avgPower(1:ii))/1000;
+    SRB.powerRunningAvg(ii) =  mean(SRB.avgPower(1:ii))/1000;
+    
+end
 
 
 %% convert results to time series and store in strcut
@@ -423,6 +475,18 @@ spAxes(1).YLabel.Position(1) = spAxes(2).YLabel.Position(1);
 spAxes(3).YLabel.Position(1) = spAxes(2).YLabel.Position(1);
 
 
+figure
+plot(tSampPlot,SR.powerRunningAvg)
+hold on
+plot(tSampPlot,SRO.powerRunningAvg)
+plot(tSampPlot,SRB.powerRunningAvg)
+
+figure
+plot(tSampPlot,runAvgKFGP/max(runAvgKFGP))
+hold on
+plot(tSampPlot,SR.powerRunningAvg/max(SR.powerRunningAvg),'--')
+grid on
+legend('Surrogate','steady flight tool')
 
 %% animation
 figure

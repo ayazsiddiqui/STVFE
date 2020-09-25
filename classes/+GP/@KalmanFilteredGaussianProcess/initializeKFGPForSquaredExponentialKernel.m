@@ -10,7 +10,7 @@ l_t = obj.temporalLengthScale;
 % total number of points in the entire domain of interest
 nXD = size(obj.xMeasure,2);
 % taylor series expansion order
-N = 1;
+N = 2;
 
 % % find the transfer function as per the Hartinkainen paper
 syms x
@@ -40,8 +40,7 @@ coEffs = coEffs./coEffs(end);
 F = [zeros(N-1,1) eye(N-1); -coEffs(1:end-1)];
 G = [zeros(N-1,1);1];
 % % calculate the numerator
-b0 = sqrt(factorial(N)*((2/(l_t^2))^N)...
-    *sqrt(pi*2*l_t^2));
+b0 = sqrt(factorial(N)*((4*k)^N)*sqrt(pi/k));
 H = [b0 zeros(1,N-1)];
 sigma0 = removeEPS(lyap(F,G*G'),nRound);
 % % calculate the discretized values

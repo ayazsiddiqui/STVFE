@@ -118,7 +118,7 @@ vhcl.turb2.setTipSpeedRatio(6,'')
 vhcl.calcFluidDynamicCoefffs
 
 %% scale
-densityScaleFactor = 100/vhcl.mass.Value;
+densityScaleFactor = 35/vhcl.mass.Value;
 vhcl.scale(1,densityScaleFactor);
 
 %% save file in its respective directory

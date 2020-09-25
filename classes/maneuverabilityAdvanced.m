@@ -68,6 +68,18 @@ classdef maneuverabilityAdvanced
         vstabAoA_Data;
     end
     
+    % turbine properties
+    properties
+        turbCenter;
+        turbDia;
+        turbCD;
+        turbCP;
+    end
+    
+    properties (Dependent = true)
+        turbArea
+    end
+    
     % reference areas properties
     properties
         wingArea;
@@ -231,12 +243,14 @@ classdef maneuverabilityAdvanced
                     obj.mass = vhcl.mass.Value;
                     obj.bridleLocation = BcB*(vhcl.rBridle_LE.Value - vhcl.rCM_LE.Value);
                     
+                    % turbine location
+                    obj.turbCenter = BcB*0.5*[1;0;0].*(vhcl.fuse.rNose_LE.Value - vhcl.rCM_LE.Value);
+                    
             end
             
         end
         
     end
-    
     
     %% setters
     methods
@@ -280,6 +294,11 @@ classdef maneuverabilityAdvanced
             val = integral(@(pathParam)...
                 obj.eqPathLength(a,b,el,pathParam,r),0,...
                 2*pi);
+        end
+        
+        % turbine diametet
+        function val = get.turbArea(obj)
+            val = 0.25*pi*obj.turbDia^2;
         end
         
     end
@@ -423,8 +442,11 @@ classdef maneuverabilityAdvanced
             % calculate v-stab loads
             vstabLoads = obj.calcvStabLoads(B_vApp);
             B_Fvstab = vstabLoads.force;
+            % calculate turb loads
+            turbLoads = obj.calcTurbLoads(B_vApp);
+            B_Fturb = turbLoads.force;
             % sum the forces
-            B_Fsum = B_Fbuoy + B_Fgrav + B_Fwing + B_Fhstab + B_Fvstab;
+            B_Fsum = B_Fbuoy + B_Fgrav + B_Fwing + B_Fhstab + B_Fvstab + B_Fturb;
             % rotate to tangent (North-East-Down) frame
             BcT = obj.makeTangentToBodyFrameRotMat(heading,tgtPitch,roll);
             TcB = transpose(BcT);
@@ -440,12 +462,28 @@ classdef maneuverabilityAdvanced
             allLoads.wingLoads  = wingLoads;
             allLoads.hstabLoads = hstabLoads;
             allLoads.vstabLoads = vstabLoads;
+            allLoads.turbLoads  = turbLoads;
             allLoads.buoyLoads  = buoyLoads;
             allLoads.B_Fgrav    = B_Fgrav;
             allLoads.B_Vapp     = B_vApp;
             
         end
         
+        % calculate optimum turbine diameter
+        function val = calcOptTurbDiameter(obj,AoA)
+            % calculate wing CL and CD
+            [~,CDwing] = obj.calcFluidCoeffs(AoA,'wing');
+            % calculate hstab CL and CD
+            [~,CDhs] = obj.calcFluidCoeffs(AoA,'hstab');
+            % calculate wing CL and CD
+            [~,CDvs] = obj.calcFluidCoeffs(AoA,'vstab');
+            % add coefficients
+            CDtot = CDwing + CDhs + CDvs;
+            % turbine area
+            optTurbArea = 0.5*CDtot*obj.wingArea/obj.turbCD;
+            % optimum value
+            val = sqrt(4*optTurbArea/pi);
+        end
         
     end
     
@@ -628,6 +666,25 @@ classdef maneuverabilityAdvanced
             val.lift = dynPressure*CL*sRef*uLift;
             val.force = val.drag + val.lift;
             val.moment = cross(rVstab,val.force);
+        end
+        
+        % calculate turbine forces and moment
+        function val = calcTurbLoads(obj,B_vApp)
+            % local variables
+            rho     = obj.fluidDensity;
+            rTurb   = obj.turbCenter;
+            dia     = obj.turbDia;
+            sRef    = 0.25*pi*dia^2;
+            CD      = obj.turbCD;
+            % drag directions
+            uDrag = obj.calcDragDirection(B_vApp);
+            % dynamic pressure
+            dynPressure = 0.5*rho*norm(B_vApp)^2;
+            % loads
+            val.drag = dynPressure*CD*sRef*uDrag;
+            val.force = val.drag;
+            val.moment = cross(rTurb,val.force);
+            
         end
     end
     
