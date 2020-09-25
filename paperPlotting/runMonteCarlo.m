@@ -204,7 +204,7 @@ for cc = 1:nDataSets
     %% do the regresson
     for mm = 1:nParams
         bstep = DUMAX(mm)*ones(2*(predictionHorz-1),1);
-        mpckfgp.explorationConstant  = BETA(mm);
+        mpckfgp.explorationConstant  = 2^BETA(mm);
         
         % mpc counter
         jj = 1;
