@@ -9,17 +9,19 @@ cd(fileparts(mfilename('fullpath')));
 
 % altitudes
 altitudes = 0:100:1000;
-kfgpTimeStep = 0.05;
+kfgpTimeStep = 0.2;
 
 % spatial kernel
+spaceKernel = 'squaredExponential';
+timeKernel  = 'squaredExponential';
 
-kfgp = GP.KalmanFilteredGaussianProcess('squaredExponential','exponential',...
+kfgp = GP.KalmanFilteredGaussianProcess(spaceKernel,timeKernel,...
     'windPowerLaw',altitudes,kfgpTimeStep);
 
 kfgp.spatialCovAmp       = 5.1^2;
 kfgp.spatialLengthScale  = 220;
 kfgp.temporalCovAmp      = 1;
-kfgp.temporalLengthScale = 20;
+kfgp.temporalLengthScale = 22;
 kfgp.noiseVariance       = 1e-3;
 
 kfgp.initVals = kfgp.initializeKFGP;
@@ -30,15 +32,15 @@ kfgp.spatialCovMatRoot = kfgp.calcSpatialCovMatRoot;
 % number of altitudes
 nAlt = numel(altitudes);
 % final time for data generation in minutes
-tFinData = 120;
+tFinData = 300;
 % time step for synthetic data generation
-timeStepSynData = 1;
+timeStepSynData = 3;
 % standard deviation for synthetic data generation
 stdDevSynData = 4;
 
 %% regression using KFGP
 % algorithm final time
-algFinTime = 60;
+algFinTime = 180;
 % sampling time vector
 tSamp = 0:kfgp.kfgpTimeStep:algFinTime;
 % number of samples
@@ -62,13 +64,13 @@ numStdDev = 1;
 
 %% initialize MPC KFGP
 % mpc time step
-mpckfgpTimeStep = 1;
+mpckfgpTimeStep = 3;
 % mpc prediction horizon
 predictionHorz  = 6;
 % fmincon options
 options = optimoptions('fmincon','algorithm','sqp','display','off');
 % make new KFGP to maintain MPC calculations
-mpckfgp = GP.KalmanFilteredGaussianProcess('squaredExponential','exponential',...
+mpckfgp = GP.KalmanFilteredGaussianProcess(spaceKernel,timeKernel,...
     'windPowerLaw',altitudes,mpckfgpTimeStep);
 
 mpckfgp.spatialCovAmp       = kfgp.spatialCovAmp;
@@ -88,7 +90,6 @@ mpckfgp.exploitationConstant = 1;
 mpckfgp.predictionHorizon    = predictionHorz;
 
 % max mean elevation angle step size
-duMax = 2;
 Astep = zeros(predictionHorz-1,predictionHorz);
 for ii = 1:predictionHorz-1
     for jj = 1:predictionHorz
@@ -111,7 +112,6 @@ lb      = minElev*ones(1,predictionHorz);
 maxElev = 60;
 ub      = maxElev*ones(1,predictionHorz);
 
-uAllowable = linspace(-duMax,duMax,5);
 
 % number of times mpc will trigger
 nMPC         = floor(tSamp(end)/mpckfgpTimeStep);
@@ -145,12 +145,12 @@ runAvgKFGP   = nan(1,nSamp);
 
 
 %% monte carlo setup
-nDataSets = 5;
+nDataSets = 500;
 rngSeeds = randi(100,[nDataSets,1]);
 
 % mobility study
-duMaxSweep = 2:10:20;
-betaSweep  = 0:100:300;
+duMaxSweep = 2:1:20;
+betaSweep  = 0:15:300;
 
 [DUMAX,BETA] = meshgrid(duMaxSweep,betaSweep);
 KFGPFVAL     = nan*DUMAX;
@@ -158,6 +158,7 @@ KFGPFVAL     = nan*DUMAX;
 moteCarloRes.omniscient = nan(1,1,nDataSets);
 moteCarloRes.baseline   = nan(1,1,nDataSets);
 moteCarloRes.kfgpMPC    = nan(size(DUMAX,1),size(DUMAX,2),nDataSets);
+nParams = numel(DUMAX);
 
 
 for cc = 1:nDataSets
@@ -201,7 +202,7 @@ for cc = 1:nDataSets
 
     
     %% do the regresson
-    for mm = 1:numel(DUMAX)
+    for mm = 1:nParams
         bstep = DUMAX(mm)*ones(2*(predictionHorz-1),1);
         mpckfgp.explorationConstant  = BETA(mm);
         
@@ -222,7 +223,6 @@ for cc = 1:nDataSets
             % KFGP
             KFGPElev(ii)  = asin(xSamp(ii)/mpckfgp.tetherLength)*180/pi;
             fValKFGP(ii)  = cosineFlowCubed(flowVal(ii),cosd(KFGPElev(ii)));
-            runAvgKFGP(ii) = mean(fValKFGP(1:ii));
             % augment altitude and height in XTsamp
             XTSamp(:,ii) = [xSamp(ii);tSamp(ii)];
             % recursion
@@ -238,21 +238,10 @@ for cc = 1:nDataSets
             % KFGP: calculate kalman states
             [F_t,sigF_t,skp1_kp1,ckp1_kp1] = ...
                 kfgp.calcKalmanStateEstimates(sk_k,ck_k,xSamp(ii),ySamp(ii));
-            % KFGP: calculate prediction mean and posterior variance
-            [muKFGP,sigKFGP] = kfgp.calcPredMeanAndPostVar(altitudes,F_t,sigF_t);
-            % KFGP: store them
-            predMeansKFGP(:,ii) = meanFnVec(:) - muKFGP;
-            postVarsKFGP(:,ii)  = sigKFGP;
-            % KFGP: calculate bounds
-            stdDevKFGP(:,ii) = postVarsKFGP(:,ii).^0.5;
-            % KFGP: upper bounds = mean + x*(standard deviation)
-            upBoundKFGP(:,ii) = predMeansKFGP(:,ii) + numStdDev*stdDevKFGP(:,ii);
-            % KFGP: lower bounds = mean - x*(standard deviation)
-            loBoundKFGP(:,ii) = predMeansKFGP(:,ii) - numStdDev*stdDevKFGP(:,ii);
             % MPCKFGP: make decision about next point
             meanElevation = asin(xSamp(ii)/mpckfgp.tetherLength)*180/pi;
-            fsBoundsB(1,1) = meanElevation + duMax;
-            fsBoundsB(2,1) = -(meanElevation - duMax);
+            fsBoundsB(1,1) = meanElevation + DUMAX(mm);
+            fsBoundsB(2,1) = -(meanElevation - DUMAX(mm));
             b = [fsBoundsB;bstep];
             
             if ii>1 && mod(tSamp(ii),mpckfgp.kfgpTimeStep)==0
@@ -266,16 +255,7 @@ for cc = 1:nDataSets
                     fmincon(@(u) -mpckfgp.calcMpcObjectiveFn(...
                     F_t_mpc,sigF_t_mpc,skp1_kp1_mpc,ckp1_kp1_mpc...
                     ,u),meanElevation*ones(predictionHorz,1),A,b,[],[]...
-                    ,lb,ub,[],options);
-                uTrajFmin(:,jj) = mpckfgp.calcDelevTraj(meanElevation,bestTraj);
-                % get other values
-                [jObjFmin(jj),jExptFmin,jExpreFmin] = ...
-                    mpckfgp.calcMpcObjectiveFn(...
-                    F_t_mpc,sigF_t_mpc,skp1_kp1_mpc,ckp1_kp1_mpc,...
-                    bestTraj);
-                jExploitFmin(jj) = sum(jExptFmin);
-                jExploreFmin(jj) = sum(jExpreFmin);
-                
+                    ,lb,ub,[],options);                
                 % next point
                 nextPoint = mpckfgp.convertMeanElevToAlt(bestTraj(1));
                 jj = jj+1;
@@ -285,6 +265,9 @@ for cc = 1:nDataSets
         
         KFGPFVAL(mm) = mean(fValKFGP); 
         KFGP_OMNI    = mean(fValKFGP)/moteCarloRes.omniscient(cc);
+        
+        fprintf('RNG seed num: %d of %d. Parameter set: %d of %d. Total %d of %d\n',...
+            cc,nDataSets,mm,nParams,(cc-1)*nParams + mm,nDataSets*nParams);
         
     end
     
@@ -304,7 +287,10 @@ AVG_VALS.BASE = mean(moteCarloRes.baseline);
 PERC_VALS.KFGP_OMNI = mean(moteCarloRes.kfgpMPC./moteCarloRes.omniscient,3);
 PERC_VALS.KFGP_BASE = mean(moteCarloRes.kfgpMPC./moteCarloRes.baseline,3);
 
+figure
 contourf(DUMAX,BETA,PERC_VALS.KFGP_OMNI);
+figure
+contourf(DUMAX,BETA,PERC_VALS.KFGP_BASE);
 
 %% plot the data
 cols = [228,26,28
