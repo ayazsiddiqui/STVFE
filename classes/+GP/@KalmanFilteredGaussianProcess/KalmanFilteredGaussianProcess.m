@@ -42,10 +42,6 @@ classdef KalmanFilteredGaussianProcess < GP.GaussianProcess
     methods
         % get set of initialization matrices required to run GPKF
         function val = initializeKFGP(obj)
-            % time step
-            timeStep = obj.kfgpTimeStep;
-            % total number of points in the entire domain of interest
-            xDomainNP = size(obj.xMeasure,2);
             % switch cases
             if isequal(@ExponentialKernel,obj.temporalKernel)
                 tempKernel = 'exponential';
