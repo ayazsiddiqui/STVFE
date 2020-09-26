@@ -14,26 +14,36 @@ cIn.wingOswaldEff   = 0.3;
 cIn.hstabOswaldEff  = 0.6;
 cIn.hstabZerAoADrag = 0.1*cIn.hstabZerAoADrag;
 cIn.vstabOswaldEff  = 0.3;
+cIn.wingCL_Data = 1.0*cIn.wingCL_Data;
 
 % tether length
 cIn.tetherLength = 1000;
-cIn.pathWidth    = 20;
-cIn.pathHeight   = 12;
+cIn.pathWidth    = 50;
+cIn.pathHeight   = 10;
+cIn.meanElevationInRadians = 36*pi/180;
 
 % turbine properties
 cIn.turbCP = 0.5;
 cIn.turbCD = 1.5*cIn.turbCP;
 % calculate optimum turbine diameter
-cIn.turbDia = cIn.calcOptTurbDiameter(11*pi/180);
+S.AoA = 10*pi/180;
+cIn.turbDia = cIn.calcOptTurbDiameter(S.AoA);
 
 % path parameter and some other constants
-S.nPoints = 41;
+S.nPoints = 31;
 S.pathParam = linspace(0,2*pi,S.nPoints);
 
 % tangent pitch angle
 S.tgtPitch = 6*pi/180;
 S.elevatorDeflection = 0;
 
+
+cIn.plotPathRadiusOfCurvature(S.pathParam);
+
+reqTangetRoll = cIn.calcSimpRequiredRoll(S.AoA,S.pathParam);
+
+figure
+plot(S.pathParam,reqTangetRoll);
 %% initialize KFGP
 rng(8);
 
@@ -120,7 +130,7 @@ mpckfgp.tetherLength        = cIn.tetherLength;
 
 % acquistion function parameters
 mpckfgp.exploitationConstant = 1;
-mpckfgp.explorationConstant  = 1;
+mpckfgp.explorationConstant  = 2^4;
 mpckfgp.predictionHorizon    = predictionHorz;
 
 % max mean elevation angle step size

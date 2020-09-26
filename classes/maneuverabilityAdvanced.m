@@ -485,6 +485,7 @@ classdef maneuverabilityAdvanced
             val = sqrt(4*optTurbArea/pi);
         end
         
+        
     end
     
     %% fluid dynamics related methods
@@ -751,6 +752,24 @@ classdef maneuverabilityAdvanced
             end
         end
         
+        % calculate required roll using simplified method
+        function val = calcSimpRequiredRoll(obj,AoA,pathParam)
+            % local variables
+            m          = obj.mass;
+            rho        = obj.fluidDensity;
+            Swing      = obj.wingArea;
+            [CLwing,~] = obj.calcFluidCoeffs(AoA,'wing');
+            
+            % path radius of curvature
+            R = obj.eqPathCurvature(obj.aBooth,obj.bBooth,...
+                obj.meanElevationInRadians,pathParam,obj.tetherLength);
+            
+            staticVal = m/(0.5*CLwing*rho*Swing);
+            % required roll
+            val = (180/pi)*asin(staticVal./R);
+            
+        end
+        
         function val = calcDifferenceInCentripetalForces(obj,Fcent,...
                 G_vFlow,T_vKite,azimuth,elevation,heading,tgtPitch,roll)
             % calculate wing loads
@@ -788,20 +807,28 @@ classdef maneuverabilityAdvanced
             roll_path = NaN(1,nPoints);
             B_Vapp_path = NaN(3,nPoints);
             for ii = 1:numel(pathParam)
-                fprintf('Iteration %d of %d.\n',ii,numel(pathParam));
+%                 fprintf('Iteration %d of %d.\n',ii,numel(pathParam));
                 if ii == 1
                     intGuess = 5*flowSpeed(1);
+                    iniRoll  = 0;
+                    options = optimset('Display','off');
                 else
                     intGuess = vH_path(ii-1);
+                    iniRoll  = roll_path(ii-1);
                 end
                 % solve equations at each path parameter
-                sol = fzero(@(vH) obj.getAttainableVelocityEqn(G_flow(:,ii),...
-                    tgtPitch(ii),pathParam(ii),vH),intGuess);
+                [sol,fval] = fsolve(@(vH) obj.getAttainableVelocityEqn(G_flow(:,ii),...
+                    tgtPitch(ii),pathParam(ii),vH,iniRoll),intGuess,options);
                 % roll
                 vH_path(ii) = sol;
                 [~,roll_path(ii),B_Vapp_path(:,ii)] = ...
                     obj.getAttainableVelocityEqn(G_flow(:,ii),...
-                    tgtPitch(ii),pathParam(ii),sol);
+                    tgtPitch(ii),pathParam(ii),sol,iniRoll);
+                if norm(fval) >1e-3
+                    warning('The solution for velocity did not converge.');
+                    fprintf('s = %0.2f, vH = %0.2f, roll = %.2f, H_Fsum = %.2f.\n',...
+                        [pathParam(ii)/(2*pi),sol,roll_path(ii)*180/pi,fval]);
+                end
             end
             val.vH_path = vH_path;
             val.roll_path = roll_path;
@@ -810,7 +837,10 @@ classdef maneuverabilityAdvanced
         end
         
         function [val,roll,B_Vapp,allLoads] = getAttainableVelocityEqn(obj,G_vFlow,...
-                tgtPitch,pathParam,vH)
+                tgtPitch,pathParam,vH,prevRoll)
+            if nargin == 5
+                prevRoll = 0;
+            end
             % get azimuth, elevation, heading, and radius of curvature
             azimuth = obj.eqPathAzimuth(obj.aBooth,obj.bBooth,pathParam);
             elevation = obj.eqPathElevation(obj.aBooth,obj.bBooth,...
@@ -825,10 +855,11 @@ classdef maneuverabilityAdvanced
             % centripetal force
             Fcent = obj.calcRequiredCentripetalForce(H_vKite,pathParam);
             % calculate required roll
-            roll = fzero(@(roll) ...
+            options = optimset('Display','off');
+            [roll,rVal] = fsolve(@(roll) ...
                 obj.calcDifferenceInCentripetalForces(Fcent,...
                 G_vFlow,T_vKite,azimuth,elevation,...
-                heading,tgtPitch,roll),0);
+                heading,tgtPitch,roll),prevRoll,options);
             % calculate all loads in generalized form
             [thrLoads,allLoads] = obj.calcTetherLoads(G_vFlow,T_vKite,...
                 azimuth,elevation,heading,tgtPitch,roll,0);
@@ -864,10 +895,14 @@ classdef maneuverabilityAdvanced
             H_Fsum = H_Fwing + H_Fhstab + H_Fvstab + H_Fbuoy + H_Fgrav + ...
                 H_Fthr;
             % output
-            val = H_Fsum(1);
+            val = H_Fsum(1)^2;
             % print
-            fprintf('s = %.2f, vH = %0.2f, roll = %.2f, val = %.2f.\n',...
-                [pathParam/(2*pi),vH,roll*180/pi,val]);
+            if norm(rVal)>1e-3
+                warning('The solution for roll angle did not converge');
+                fprintf('s = %0.2f, vH = %0.2f, roll = %0.2f, rVal = %0.2f, H_Fsum = %0.2f.\n',...
+                [pathParam/(2*pi),vH,roll*180/pi,rVal,val]);
+            end
+
         end
     end
     
