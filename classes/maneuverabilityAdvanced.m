@@ -100,6 +100,7 @@ classdef maneuverabilityAdvanced
         eqPathElevation
         eqPathCoordinates
         eqPathTangentInGndFrame
+        eqPathPerpendInGndFrame
         eqPathHeading
         eqPathCurvature
         eqPathLength
@@ -116,10 +117,15 @@ classdef maneuverabilityAdvanced
         lwd = 1.0;          % line width
         fontSize = 11;      % font size
         linStyleOrder = {'-','--',':o',};
-        colorOrder = [228,26,28
+        colorOrder = [0,0,0
             55,126,184
             77,175,74
             152,78,16]./255;
+        
+%         colorOrder = [228,26,28
+%             55,126,184
+%             77,175,74
+%             152,78,16]./255;
     end
     
     %% constructor
@@ -143,10 +149,12 @@ classdef maneuverabilityAdvanced
             G_path = [lemX; lemY; lemZ];
             % differentiate wrt s to get path tangent vector
             G_pathTgt = diff(G_path,s);
+            % get path perpendicular vector
+            G_pathPer = -cross(G_path,G_pathTgt);
             % rotate path tangent vector to tangent frame
             TcG = obj.makeGroundToTangentialFrameRotMat(pathAzimuth,...
                 pathElevation);
-            T_pathTgt = TcG*G_pathTgt;
+            T_pathTgt = TcG*G_pathTgt;        
             % calculate heading angle required in the tangent frame
             reqHeading = atan2(T_pathTgt(2),T_pathTgt(1));
             % first derivative
@@ -176,6 +184,7 @@ classdef maneuverabilityAdvanced
             pathElevation = subs(pathElevation,oldSyms,newSyms);
             G_path = subs(G_path,oldSyms,newSyms);
             G_pathTgt = subs(G_pathTgt,oldSyms,newSyms);
+            G_pathPer = subs(G_pathPer,oldSyms,newSyms);            
             reqHeading = subs(reqHeading,oldSyms,newSyms);
             % radius of curvature = 1/curvate
             obj.eqPathCurvature = matlabFunction(Kden/Knum);
@@ -185,6 +194,7 @@ classdef maneuverabilityAdvanced
             obj.eqPathElevation   = matlabFunction(pathElevation);
             obj.eqPathCoordinates = matlabFunction(G_path);
             obj.eqPathTangentInGndFrame = matlabFunction(G_pathTgt);
+            obj.eqPathPerpendInGndFrame = matlabFunction(G_pathPer);
             obj.eqPathHeading   = matlabFunction(reqHeading);
             
             switch nargin
@@ -709,8 +719,13 @@ classdef maneuverabilityAdvanced
                 obj.meanElevationInRadians,pathParam,obj.tetherLength);
             % calculate centripetal force required
             val = obj.mass*H_vKite(1)^2./pathRcurve;
+            % unit vector perpendicular to path
+            perpVec = obj.eqPathPerpendInGndFrame(obj.aBooth,obj.bBooth,...
+                obj.meanElevationInRadians,pathParam,obj.tetherLength);
+            perpVec = perpVec./max(eps,norm(perpVec));
             % correct direction
             val(pathParam>=pi) = -1*val(pathParam>=pi);
+            val = perpVec*val;
         end
         
         function val = calcRequiredRoll(obj,G_vFlow,H_vKite,pathParam,varargin)
@@ -731,9 +746,6 @@ classdef maneuverabilityAdvanced
             % get path heading angle
             pathHeading = obj.eqPathHeading(obj.aBooth,obj.bBooth,...
                 obj.meanElevationInRadians,pathParam,obj.tetherLength);
-            % calculate required centripetal force to stay on path
-            reqFcentripetal = obj.calcRequiredCentripetalForce(H_vKite,...
-                pathParam);
             % preallocation
             val = pathParam*nan;
             % kite velocity in tangent frame along the path
@@ -746,7 +758,7 @@ classdef maneuverabilityAdvanced
                     x0 = val(ii-1);
                 end
                 val(ii) = fzero(@(roll) ...
-                    obj.calcDifferenceInCentripetalForces(reqFcentripetal(ii),...
+                    obj.calcDifferenceInCentripetalForces(pathParam(ii),...
                     G_vFlow,T_vKite(:,ii),azim(ii),elev(ii),...
                     pathHeading(ii),tgtPitch(ii),roll),x0);
             end
@@ -770,8 +782,18 @@ classdef maneuverabilityAdvanced
             
         end
         
-        function val = calcDifferenceInCentripetalForces(obj,Fcent,...
+        function val = calcDifferenceInCentripetalForces(obj,pathParam,...
                 G_vFlow,T_vKite,azimuth,elevation,heading,tgtPitch,roll)
+            % rotate to heading frame
+            TcG = obj.makeGroundToTangentialFrameRotMat(azimuth,elevation);
+            HcT = obj.makeTangentToHeadingFrameRotMat(heading);
+            HcG = HcT*TcG;
+            H_vKite = HcT*T_vKite;
+            
+            % calculate centripetal force
+            reqFcentripetal = obj.calcRequiredCentripetalForce(H_vKite,...
+                pathParam);
+            H_Fcent = HcG*reqFcentripetal;
             % calculate wing loads
             B_vApp = obj.calcApparentVelInBodyFrame(...
                 G_vFlow,T_vKite,azimuth,elevation,heading,tgtPitch,roll);
@@ -781,7 +803,7 @@ classdef maneuverabilityAdvanced
             H_wingLift = transpose(BcH)*wingLoads.lift;
             % get the differnce between its y component and centripetal
             % force
-            val = Fcent - H_wingLift(2);
+            val = H_Fcent(2) - H_wingLift(2);
         end
     end
     
@@ -852,12 +874,10 @@ classdef maneuverabilityAdvanced
             % calculate kite vel in tangent frame
             HcT = obj.makeTangentToHeadingFrameRotMat(heading);
             T_vKite = transpose(HcT)*H_vKite;
-            % centripetal force
-            Fcent = obj.calcRequiredCentripetalForce(H_vKite,pathParam);
             % calculate required roll
             options = optimset('Display','off');
             [roll,rVal] = fsolve(@(roll) ...
-                obj.calcDifferenceInCentripetalForces(Fcent,...
+                obj.calcDifferenceInCentripetalForces(pathParam,...
                 G_vFlow,T_vKite,azimuth,elevation,...
                 heading,tgtPitch,roll),prevRoll,options);
             % calculate all loads in generalized form
@@ -1470,15 +1490,24 @@ classdef maneuverabilityAdvanced
             tanVec = obj.eqPathTangentInGndFrame(obj.aBooth,obj.bBooth,...
                 obj.meanElevationInRadians,pathParam,obj.tetherLength);
             tanVec = tanVec./max(norm(tanVec),eps);
+            % get the perpendicular vector
+            perVec = obj.eqPathPerpendInGndFrame(obj.aBooth,obj.bBooth,...
+                obj.meanElevationInRadians,pathParam,obj.tetherLength);
+            perVec = perVec./max(norm(perVec),eps);
             % plot options
             lineWidth = 0.8;
             scale = obj.tetherLength*0.15;
             % quiver plot it
-            val = quiver3(pointLoc(1),pointLoc(2),pointLoc(3),...
+            val(1) = quiver3(pointLoc(1),pointLoc(2),pointLoc(3),...
                 tanVec(1),tanVec(2),tanVec(3),scale,...
                 'MaxHeadSize',0.6,...
                 'color',[255,127,0]/255,...
                 'linewidth',lineWidth);
+            val(2) = quiver3(pointLoc(1),pointLoc(2),pointLoc(3),...
+                perVec(1),perVec(2),perVec(3),scale,...
+                'MaxHeadSize',0.6,...
+                'color',[255,127,0]/255,...
+                'linewidth',lineWidth);            
         end
         
         % plot radius of curvature
@@ -1641,7 +1670,7 @@ classdef maneuverabilityAdvanced
                     % kite axes
                     if pp.Results.addKiteTrajectory
                         pAxes = obj.plotBodyFrameAxes(azim(ii),...
-                            elev(2,ii),hAng(ii),tgtPitch(ii),roll(ii));
+                            elev(ii),hAng(ii),tgtPitch(ii),roll(ii));
                     end
                     % radius of curvature
                     subplot(spSz(1),spSz(2),rcIdx);

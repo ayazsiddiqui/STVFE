@@ -231,7 +231,7 @@ fPlots(2) = semilogy(tSampPlot,timeKFGP...
 grid(sbAxis(1:end),'on');
 set(sbAxis(1:end),'GridLineStyle',':')
 xlabel(sbAxis(1:end),'\textbf{Time [hr]}','fontweight','bold');   
-sbAxis(1).YLim = [60 110];
+sbAxis(1).YLim = [90 110];
 
 set(sbAxis(1:end),'FontSize',12);
 set(gcf,'InnerPosition',1*[-00 -00 560 1.3*420])

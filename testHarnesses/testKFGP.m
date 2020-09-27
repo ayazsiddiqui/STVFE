@@ -401,7 +401,7 @@ tSampPlot = tSamp/60;
 
 % plot elevation angle trajectory
 pIdx = 1;
-spAxes(spIdx) = subplot(3,1,spIdx);
+spAxes(spIdx) = subplot(4,1,spIdx);
 hold(spAxes(spIdx),'on');
 ylabel(spAxes(spIdx),'$\mathbf{\theta_{sp}}$ \textbf{[deg]}','fontweight','bold');
 spObj(pIdx) = stairs(tSampPlot,omniElev...
@@ -424,7 +424,7 @@ spObj(pIdx) = stairs(tSampPlot,KFGPElev...
 
 % plot instantaenuos jExploit
 spIdx = spIdx + 1;
-spAxes(spIdx) = subplot(3,1,spIdx);
+spAxes(spIdx) = subplot(4,1,spIdx);
 pIdx = 1;
 hold(spAxes(spIdx),'on');
 ylabel(spAxes(spIdx),'$\mathbf{J_{exploit}(t_{k})}$','fontweight','bold');
@@ -448,7 +448,7 @@ spObj(pIdx) = plot(tSampPlot,fValKFGP...
 
 % plot running average j_exploit
 spIdx = spIdx + 1;
-spAxes(spIdx) = subplot(3,1,spIdx);
+spAxes(spIdx) = subplot(4,1,spIdx);
 pIdx = 1;
 hold(spAxes(spIdx),'on');
 ylabel(spAxes(spIdx),'\textbf{Avg.} $\mathbf{J_{exploit}}$','fontweight','bold');
@@ -469,6 +469,32 @@ spObj(pIdx) = plot(tSampPlot,runAvgKFGP...
     ,'color',cols(pIdx,:)...
     ,'MarkerFaceColor',cols(pIdx,:)...
     ,'linewidth',lwd);
+
+% plot running average power
+spIdx = spIdx + 1;
+spAxes(spIdx) = subplot(4,1,spIdx);
+pIdx = 1;
+hold(spAxes(spIdx),'on');
+ylabel(spAxes(spIdx),'\textbf{Avg. power [kW]}','fontweight','bold');
+spObj(pIdx) = plot(tSampPlot,SRO.powerRunningAvg...
+    ,'-'...
+    ,'color',cols(pIdx,:)...
+    ,'MarkerFaceColor',cols(pIdx,:)...
+    ,'linewidth',lwd);
+pIdx = pIdx + 1;
+spObj(pIdx) = plot(tSampPlot,SRB.powerRunningAvg...
+    ,'-'...
+    ,'color',cols(pIdx,:)...
+    ,'MarkerFaceColor',cols(pIdx,:)...
+    ,'linewidth',lwd);
+pIdx = pIdx + 1;
+spObj(pIdx) = plot(tSampPlot,SR.powerRunningAvg...
+    ,'-'...
+    ,'color',cols(pIdx,:)...
+    ,'MarkerFaceColor',cols(pIdx,:)...
+    ,'linewidth',lwd);
+
+% legend
 legend('Omniscient','Baseline','MPC','location','bestoutside'...
     ,'orientation','horizontal')
 
@@ -479,10 +505,11 @@ xlabel(spAxes(1:end),'\textbf{Time [hr]}','fontweight','bold');
 set(spAxes(1:end),'FontSize',12);
 % spAxes(1).YTick = linspace(spAxes(1).YTick(1),spAxes(1).YTick(end),3);
 % spAxes(2).YTick = linspace(spAxes(2).YTick(1),spAxes(2).YTick(end),3);
-set(gcf,'InnerPosition',1*[-00 -00 560 1.8*420])
+set(gcf,'InnerPosition',1*[-00 -00 560 2.2*420])
 
 spAxes(1).YLabel.Position(1) = spAxes(2).YLabel.Position(1);
 spAxes(3).YLabel.Position(1) = spAxes(2).YLabel.Position(1);
+spAxes(4).YLabel.Position(1) = spAxes(2).YLabel.Position(1);
 
 
 figure
