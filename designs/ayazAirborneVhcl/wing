@@ -1,0 +1,21 @@
+Wing
+#Mach
+0.00
+#IYsym   IZsym   Zsym
+0 		 0		 0
+#Sref    Cref    Bref
+8.38 	 0.92 	 9.15
+#Xref    Yref    Zref
+0.83 	 0.00 	 0.02
+#-------------------------------------------------------------
+SURFACE
+Wing
+#Nchord 	Cspace 	Nspan 	Sspace
+10 			1.00 	50 		1.00
+
+ANGLE
+0.0
+#-------------------------------------------------------------
+SECTION
+#Xle 	 Yle 	 Zle 	 Chord 	 Ainc 	 Nspanwise 	 Sspace
+0.00 	 0.00 	 0.00 	 1.39 	 0.00 	 0 			 0
