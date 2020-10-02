@@ -106,10 +106,13 @@ aBooth = block.InputPort(3).Data;
 bBooth = block.InputPort(4).Data;
 meanElevation = block.InputPort(5).Data;
 radius = block.InputPort(6).Data;
+maxForwardPercentage = 0.25;
+
+options = optimoptions('fmincon','algorithm','sqp');
 
 sBest = fmincon( @(s) ...
     distBetweenPts(rCM,s,aBooth,bBooth,meanElevation,radius),s0,[],[],[],[],...
-    s0,s0+0.5*2*pi);
+    s0,s0 + maxForwardPercentage*2*pi,[],options);
 
 
 block.OutputPort(1).Data = sBest;
