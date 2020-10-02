@@ -34,6 +34,8 @@ x0 = sTest(minIdx);
 grad0 = forwardGradient(objF,0,gradStep);
 H0 = 1;
 
+alphaLeft = 0;
+alphaRight = 0;
 % Step 2: Convergence check
 while norm(grad0) >= bfgsConvergeTol && interNo < maxIter
     
@@ -68,13 +70,17 @@ while norm(grad0) >= bfgsConvergeTol && interNo < maxIter
     
 end
 
-optPts = x0;
-fMin = objF(optPts);
+ptLoc = @(aBooth,bBooth,meanElevation,radius,s)[radius.*cos(meanElevation-(aBooth.^2.*1.0./bBooth.^2.*cos(s).*sin(s))./(aBooth.^2.*1.0./bBooth.^2.*cos(s).^2+1.0)).*cos((aBooth.*sin(s))./(aBooth.^2.*1.0./bBooth.^2.*cos(s).^2+1.0));-radius.*cos(meanElevation-(aBooth.^2.*1.0./bBooth.^2.*cos(s).*sin(s))./(aBooth.^2.*1.0./bBooth.^2.*cos(s).^2+1.0)).*sin((aBooth.*sin(s))./(aBooth.^2.*1.0./bBooth.^2.*cos(s).^2+1.0));radius.*sin(meanElevation-(aBooth.^2.*1.0./bBooth.^2.*cos(s).*sin(s))./(aBooth.^2.*1.0./bBooth.^2.*cos(s).^2+1.0))];
+
+optPts = ptLoc(aBooth,bBooth,meanElevation,radius,x0);
+fMin = objF(x0);
 
 %% secondary functions
 %%%% bounding phase
     function [alphaLeft,alphaRight] = boundingPhase(objF,iniPt,direction,stepSize)
         
+        alphaLeft = 0;
+        alphaRight = 0;
         maxK = bpMaxIter;
         fVal = NaN(1,maxK);
         alpha = NaN(1,maxK);
@@ -139,6 +145,7 @@ fMin = objF(optPts);
     function alphaStar = goldenSection(objF,iniPt,direction,alphaLeft,alphaRight,...
             convergeTol)
         
+        L = 0;
         % initial length
         LStart = abs(alphaRight - alphaLeft);
         L(1) = LStart;
