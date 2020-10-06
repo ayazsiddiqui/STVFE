@@ -136,7 +136,7 @@ tabVal = [...
 
 AoA_vals = tabVal(:,1);
 CL_vals = tabVal(:,2);
-CD_vals = tabVal(:,3);
+CD_vals = tabVal(:,3) + 0.1;
 
 
 end

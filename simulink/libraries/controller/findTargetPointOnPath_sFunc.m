@@ -105,12 +105,12 @@ radius = block.InputPort(6).Data;
 
 options = optimoptions('fmincon','algorithm','sqp');
 
-sTarget = fmincon(@(ds)...
+optDs = fmincon(@(ds)...
     calcTargetDistance(aBooth,bBooth,meanElevation,radius,s0,L1,ds),s0,...
     [],[],[],[],0,[],[],options);
 
 
-block.OutputPort(1).Data = sTarget;
+block.OutputPort(1).Data = s0 + optDs;
 %end Outputs
 
 
