@@ -1,13 +1,17 @@
 clear
 clc
 
-objF = @(x) -sin(x);
-rCM = [100;0;150];
-
-aBooth = 0.5;
-bBooth = 1;
-meanElevation = 30*pi/180;
-radius = 150;
-s0 = 0;
+objF = @(x) -4.*sin(x).*(1 + cos(x));
+% objF = @(x) (x.^2 + 2);
+lb = -1;
+ub = 3;
 convergeTol = 1e-5;
+
+xS = goldenSection(objF,lb,ub,convergeTol);
+
+
+xT = linspace(lb,ub,101);
+plot(xT,objF(xT));
+hold on
+plot(xS,objF(xS),'r*');
 

@@ -1,55 +1,54 @@
-function alphaStar = goldenSection(objF,iniPt,direction,alphaLeft,alphaRight,...
-            convergeTol)
+function xStar = goldenSection(objF,lb,ub,convergeTol)
+
+xL = min(lb,ub);
+xU = max(lb,ub);
+% initial length
+Ls = xU - xL;
+L  = Ls;
+% golden ratio
+d = (sqrt(5) - 1)/2;
+
+x1 = xL + d*(xU - xL);
+x2 = xU - d*(xU - xL);
+
+f1 = objF(x1);
+f2 = objF(x2);
+
+k = 1;
+
+while L/Ls > convergeTol && k<26
+    
+    if f1 < f2
         
-        % initial length
-        LStart = abs(alphaRight - alphaLeft);
-        L = LStart;
+        xL = x2;
         
-        % golden ratio
-        tau = 0.381966;
-        tauI = 1 - tau;
+        x2 = x1;
+        f2 = f1;
         
-        alphaOne = tauI*alphaLeft + tau*alphaRight;
-        alphaTwo = tau*alphaLeft + tauI*alphaRight;
+        x1 = xL + d*(xU - xL);
+        f1 = objF(x1);
         
-        f1 = objF(iniPt + alphaOne*direction);
-        f2 = objF(iniPt + alphaTwo*direction);
+        L = xU - xL;
         
-        k = 1;
+        k = k+1;
         
-        while L/LStart > convergeTol && k<1000
-            
-            if f2 > f1
-                
-                alphaRight = alphaTwo;
-                
-                alphaTwo = alphaOne;
-                f2 = f1;
-                
-                alphaOne = tauI*alphaLeft + (tau*alphaRight);
-                f1 = objF(iniPt + (alphaOne*direction));
-                
-                L = abs(alphaRight - alphaLeft);
-                
-                k = k+1;
-                
-            else
-                
-                alphaLeft = alphaOne;
-                
-                alphaOne = alphaTwo;
-                f1 = f2;
-                
-                alphaTwo = (tau*alphaLeft) + tauI*alphaRight;
-                f2 = objF(iniPt + (alphaTwo*direction));
-                
-                L = abs(alphaRight - alphaLeft);
-                
-                k = k+1;
-                
-            end
-        end
+    else
         
-        alphaStar = (alphaLeft + alphaRight)/2;
+        xU = x1;
+        
+        x1 = x2;
+        f1 = f2;
+        
+        x2 = xU - d*(xU - xL);
+        f2 = objF(x2);
+        
+        L = xU - xL;
+        
+        k = k+1;
         
     end
+end
+
+xStar = (xU + xL)/2;
+
+end
