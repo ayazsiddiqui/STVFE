@@ -37,6 +37,7 @@ kpSpool = 0.0;
 kdSpool = 0.0;
 kiSpool = 0.0;
 tauSpool = 1;
+convergeTol = 1e-5;
 
 % environment
 rho = 1.22;
