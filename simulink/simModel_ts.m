@@ -14,7 +14,6 @@ init_R = 250;
 init_azim = 0;
 init_elev = meanElevation*pi/180;
 
-
 init_Speed = 10;
 init_Heading = 210;
 init_azimRate = init_Speed*cosd(init_Heading)/init_R;
