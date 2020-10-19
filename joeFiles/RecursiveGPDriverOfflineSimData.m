@@ -6,8 +6,8 @@ load('SimOutRGP.mat')
 
 basisDesignSpace = linspace(0,20,size_grid)*(pi/180);
 
-% thetaLib = [2 4 3 1 0 15 5 7 6 8 12 8 8 8]'*(pi/180);
-% PerfmIndxLib = [0.3 0.22 0.35 0.18 0.4 0.33 0.42 0.24 0.26 0.19 0.25 0.25 0.22 0.22]';
+thetaLib = [2 4 3 1 0 15 5 7 6 8 12 8 8 8]'*(pi/180);
+PerfmIndxLib = [0.3 0.22 0.35 0.18 0.4 0.33 0.42 0.24 0.26 0.19 0.25 0.25 0.22 0.22]';
 % sigmaSq = 0.05;        % Approximate variance level due to noise
 sigmaSq = 1;        % Approximate variance level due to noise
 hypPara = 0.01;
