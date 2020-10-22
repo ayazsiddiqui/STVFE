@@ -70,7 +70,7 @@ classdef RecursiveGaussianProcess < GP.GaussianProcess
         % calculate prediction mean and posterior variance assuming colored
         % measurements
         function [predMean,postVarMat] = ...
-                calcColoredPredMeanAndPostVar(obj,muGt_1,cGt_1,xt,yt)
+                calcColoredPredMeanAndPostVar(obj,muGt_1,cGt_1,xt,yk,yk_1)
             % extract values from basic vector
             xB = obj.xBasis;
             % number of design/training points
@@ -88,17 +88,19 @@ classdef RecursiveGaussianProcess < GP.GaussianProcess
             % discrete time coloring filter time constant
             disTau = obj.sampleTime/(obj.filterTimeConstant + obj.sampleTime);
             % H prime
-            Hp = Jt - (1 - disTau)*Jt;    
+            Hp = (1 - disTau)*Jt;    
             % calculate muP as per Huber Eqn. (6)
-            muP = mXt + Hp*(muGt_1 - obj.meanFnVector)';
+            muP = mXt + Jt*(muGt_1 - obj.meanFnVector)';
             % calculate B as per Huber Eqn. (7)
             B = kXtXt - Hp*kXtX';
             % calculate cP as per Huber Eqn. (9)
-            cP = B + Hp*cGt_1*Hp';
+            cP = Hp*cGt_1*Hp';
             % kalman filter gain matrix
             Gk = cGt_1*Hp'*(cP + obj.noiseVariance)^-1;
+            % auxilary state
+            yp = yk - disTau*yk_1;
             % prediction mean
-            predMean = muGt_1' + Gk*(yt - muP);
+            predMean = muGt_1' + Gk*(yp - Hp*muGt_1');
             % posterior variance
             postVarMat = cGt_1 - Gk*Hp*cGt_1;                
 

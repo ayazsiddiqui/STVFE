@@ -51,7 +51,7 @@ SD.stdDevSynData = 0.5;
 
 %% regression using traditional GP and RGP
 % time step
-A.dt = 0.25;
+A.dt = 1/20;
 % algorithm final time
 A.algFinTime = 30;
 
@@ -85,7 +85,7 @@ RGPC.stdDev   = NaN(nAlt,nSamp);
 RGPC.upBound  = NaN(nAlt,nSamp);
 RGPC.loBound  = NaN(nAlt,nSamp);
 
-rgp.filterTimeConstant = 0.01;
+rgp.filterTimeConstant = 0.15;
 rgp.sampleTime         = A.dt;
 % number of std deviations for bounds calculations
 A.numStdDev = 1;
@@ -97,8 +97,7 @@ for ii = 1:nSamp
     if ii == 1
         S.xSamp(ii) = altitudes(randperm(nAlt,1));
     else
-%         [~,maxVarIdx] = max(RGP.postVars(:,ii-1));
-        S.xSamp(ii) = altitudes(randperm(nAlt,1));
+        S.xSamp(ii) = nextPoint;
     end
     % measure flow at xSamp(ii) at tSamp(ii)
     S.ySamp(ii) = interp1(resample(synAlt,S.tSamp(ii)*60).Data,...
@@ -108,13 +107,14 @@ for ii = 1:nSamp
     % recursion
     if ii == 1
         % RGP: initial state estimate
-        muGt_1   = rgp.meanFnVector;
-        cGt_1    = rgp.spatialCovMat;
+        muGt_1  = rgp.meanFnVector;
+        cGt_1   = rgp.spatialCovMat;
         % GP: covariance matrix
-        covMat = gp.makeTotalCovarianceMatrix(S.XTSamp(:,ii));     
+        covMat  = gp.makeTotalCovarianceMatrix(S.XTSamp(:,ii));     
         % colored RGP: 
-        CmuGt_1   = rgp.meanFnVector;
-        CcGt_1    = rgp.spatialCovMat;
+        CmuGt_1 = rgp.meanFnVector;
+        CcGt_1  = rgp.spatialCovMat;
+        yPrev = 0;
     else
         % RGP: initial state estimate
         muGt_1   = predMean';
@@ -125,6 +125,7 @@ for ii = 1:nSamp
         % colored RGP: initial state estimate
         CmuGt_1   = CpredMean';
         CcGt_1    = CpostVarMat;
+        yPrev = S.ySamp(ii-1);
     end
     % RGP: calculate prediction mean and posterior variance
     [predMean,postVarMat] =...
@@ -155,7 +156,7 @@ for ii = 1:nSamp
     
     % colored RGP: calculate prediction mean and posterior variance
     [CpredMean,CpostVarMat] =...
-        rgp.calcColoredPredMeanAndPostVar(CmuGt_1,CcGt_1,S.xSamp(ii),S.ySamp(ii));  
+        rgp.calcColoredPredMeanAndPostVar(CmuGt_1,CcGt_1,S.xSamp(ii),S.ySamp(ii),yPrev);  
     % colored RGP: store them
     RGPC.predMean(:,ii) = CpredMean;
     RGPC.postVars(:,ii)  = diag(CpostVarMat);
@@ -165,6 +166,12 @@ for ii = 1:nSamp
     RGPC.upBound(:,ii) = RGPC.predMean(:,ii) + A.numStdDev*RGPC.stdDev(:,ii);
     % colored RGP: lower bounds = mean - x*(standard deviation)
     RGPC.loBound(:,ii) = RGPC.predMean(:,ii) - A.numStdDev*RGPC.stdDev(:,ii);
+    
+    
+    % next point
+    if mod(S.tSamp(ii),(10*A.dt)) == 0
+        nextPoint = altitudes(randperm(nAlt,1));
+    end
     
 end
 
@@ -202,5 +209,6 @@ ylabel('Pred. mean difference')
 
 
 %% amimate the data
-F = animatedPlot(synFlow,synAlt,'plotTimeStep',0.25,...
+figure
+F = animatedPlot(synFlow,synAlt,'plotTimeStep',A.dt,...
     'regressionResults',regressionRes);
