@@ -44,7 +44,7 @@ SD.tFinData = 120;
 % time step for synthetic data generation
 SD.timeStepSynData = 1;
 % standard deviation for synthetic data generation
-SD.stdDevSynData = 0.5;
+SD.stdDevSynData = 0.0;
 % get the time series object
 [synFlow,synAlt] = gp2.generateSyntheticFlowData(altitudes,SD.tFinData,SD.stdDevSynData,...
     'timeStep',SD.timeStepSynData,'temporalLengthScale',1);
@@ -212,3 +212,13 @@ ylabel('Pred. mean difference')
 figure
 F = animatedPlot(synFlow,synAlt,'plotTimeStep',A.dt,...
     'regressionResults',regressionRes);
+
+video = VideoWriter('video1','Motion JPEG AVI');
+video.FrameRate = 1/A.dt;
+set(gca,'nextplot','replacechildren');
+
+open(video)
+for ii = 1:length(F)
+    writeVideo(video, F(ii));
+end
+close(video)
