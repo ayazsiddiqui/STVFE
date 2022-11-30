@@ -3,7 +3,7 @@ clc
 % close all
 
 cd(fileparts(mfilename('fullpath')));
-load('envFile');
+% load('envFile');
 
 
 %% initialize GP

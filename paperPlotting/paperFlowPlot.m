@@ -54,6 +54,7 @@ for ii = 1:length(tVec)
         ,'MarkerFaceColor',P.linProp{ii,1}...
         ,'MarkerSize',5 ...
         ,'linewidth',1);
+%     title(strcat(num2str(tVec(ii)/3600,'%.1f'),' hrs'));
     hold on
 end
 

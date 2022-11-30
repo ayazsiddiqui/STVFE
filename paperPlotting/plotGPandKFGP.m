@@ -10,7 +10,7 @@ rng(1);
 
 % altitudes
 altitudes = 0:100:1000;
-kfgpTimeStep = 0.3;
+kfgpTimeStep = 0.5;
 
 % make class object
 spKernel = 'squaredExponential';
@@ -97,7 +97,7 @@ loBoundKFGP   = NaN(nfinAlt,nSamp);
 
 kfgpToGpFit   = NaN(1,nSamp);
 % number of std deviations for bounds calculations
-numStdDev = 1;
+numStdDev = 2;
 
 % make for loop
 for ii = 1:nSamp
@@ -203,7 +203,7 @@ nSp = 1;
 sbAxis(nSp) = subplot(2,1,nSp);
 % set axis properties
 hold(sbAxis(nSp),'on');
-ylabel(sbAxis(nSp),'\textbf{Fit [\%]}','fontweight','bold');
+ylabel(sbAxis(nSp),'Fit [\%]');
 fPlots(1) = plot(tSampPlot,100*kfgpToGpFit...
        ,P.linProp{1,2}...
        ,'color','k'...
@@ -220,23 +220,24 @@ fPlots(2) = semilogy(tSampPlot,timeGP...
        ,'linewidth',1.2);   
    
 hold(sbAxis(nSp),'on');
-ylabel(sbAxis(nSp),'\textbf{Computation time [s]}','fontweight','bold');
+ylabel(sbAxis(nSp),'Computation time [s]');
 
 fPlots(2) = semilogy(tSampPlot,timeKFGP...
        ,P.linProp{1,2}...
        ,'color',P.linProp{2,1}...
        ,'MarkerFaceColor',P.linProp{4,1}...
        ,'linewidth',1.2);     
+ylim([1e-4 1e-1]);
 
 grid(sbAxis(1:end),'on');
 set(sbAxis(1:end),'GridLineStyle',':')
-xlabel(sbAxis(1:end),'\textbf{Time [hr]}','fontweight','bold');   
+xlabel(sbAxis(1:end),'Time [hr]');   
 sbAxis(1).YLim = [90 110];
 
 set(sbAxis(1:end),'FontSize',12);
 set(gcf,'InnerPosition',1*[-00 -00 560 1.3*420])
 sbAxis(1).YLabel.Position(1) = sbAxis(2).YLabel.Position(1);
-legend('Batch GP','Kalman filter GP','location','best')
+legend('Batch GP','Kalman filter GP','location','south','orientation','horizontal')
 
 %% export file
 saveFile = input('Save file? Options: Enter y or n\n','s');
@@ -265,6 +266,20 @@ regressionRes(2).legend    = 'GP';
 %% plot the data
 figure
 F = animatedPlot(synFlow,synAlt,'plotTimeStep',kfgpTimeStep,...
-    'regressionResults',regressionRes,'wait',true);
+    'regressionResults',regressionRes,'wait',false,'plotTimeStep',1);
+
+%% video
+% % % % video setting
+video = VideoWriter('kfgpDemo','Uncompressed AVI');
+% % video = VideoWriter('vid_Test1','MPEG-4');
+video.FrameRate = 5;
+% video.Quality   = 100;
+% set(gca,'nextplot','replacechildren');
+
+open(video)
+for ii = 1:length(F)
+    writeVideo(video, F(ii));
+end
+close(video)
 
 

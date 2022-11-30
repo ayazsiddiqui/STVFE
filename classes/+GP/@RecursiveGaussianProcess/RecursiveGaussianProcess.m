@@ -17,6 +17,11 @@ classdef RecursiveGaussianProcess < GP.GaussianProcess
        sampleTime
     end
     
+    % controller properties
+    properties
+        deviationPenalty
+    end
+    
     %% constructor
     methods
         function obj = RecursiveGaussianProcess(spatialKernel,...
@@ -105,6 +110,37 @@ classdef RecursiveGaussianProcess < GP.GaussianProcess
             postVarMat = cGt_1 - Gk*Hp*cGt_1;                
 
         end
+    end
+    
+    %% control methods
+    methods
+        % acquisition function
+        function val = acquisitionFunction(obj,muGt_1,cGt_1,xt,yk)
+            % RGP: calculate prediction mean and posterior variance
+            [predMean,~] =...
+                obj.calcPredMeanAndPostVar(muGt_1,cGt_1,xt,yk);
+            % calculate distance between xt and basis vector
+            devFromBasis = sqrt(sum((xt - obj.xBasis).^2,1));
+            % deviation penalty
+            devPenalty = exp(-obj.deviationPenalty.*devFromBasis(:));
+            % objective function val
+            val = predMean(:).*devPenalty;
+            
+        end
+        
+       % choose next operating point by maximizing acquisition function
+       function [val,varargout] = chooseNextPoint(obj,muGt_1,cGt_1,xt,yk)
+           % calculate acquisition function value over basis vector space
+           aqVal = obj.acquisitionFunction(muGt_1,cGt_1,xt,yk);
+           % find index that maximizes acquisition function
+           [mAq,maxIdx] = max(aqVal);
+           % choose next point based on max value
+           val = obj.xBasis(:,maxIdx);
+           % optional output
+           varargout{1} = mAq;
+           
+       end
+       
     end
     
     

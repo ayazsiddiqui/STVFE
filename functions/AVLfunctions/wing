@@ -4,9 +4,9 @@ Wing
 #IYsym   IZsym   Zsym
 0 		 0		 0
 #Sref    Cref    Bref
-8.38 	 0.92 	 9.15
+2.54 	 0.50 	 5.04
 #Xref    Yref    Zref
-0.83 	 0.00 	 0.02
+0.50 	 0.00 	 0.02
 #-------------------------------------------------------------
 SURFACE
 Wing
@@ -18,10 +18,10 @@ ANGLE
 #-------------------------------------------------------------
 SECTION
 #Xle 	 Yle 	 Zle 	 Chord 	 Ainc 	 Nspanwise 	 Sspace
-0.00 	 0.00 	 0.00 	 1.39 	 0.00 	 0 			 0
+0.00 	 0.00 	 0.00 	 0.55 	 0.00 	 0 			 0
 
-AFIL
-n63412.dat
+NACA
+2412
 
 CONTROL
 #Cname 		Cgain 	x/c 	xHinge 	yHinge 	zHinge 	SgnDup
@@ -32,10 +32,10 @@ CLAF
 #-------------------------------------------------------------
 SECTION
 #Xle 	 Yle 	 Zle 	 Chord 	 Ainc 	 Nspanwise 	 Sspace
-0.00 	 4.58 	 0.00 	 0.44 	 0.00 	 0 			 0
+0.06 	 2.52 	 0.00 	 0.46 	 0.00 	 0 			 0
 
-AFIL
-n63412.dat
+NACA
+2412
 
 CONTROL
 #Cname 		Cgain 	x/c 	xHinge 	yHinge 	zHinge 	SgnDup

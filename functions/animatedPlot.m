@@ -80,7 +80,7 @@ axisObj.XLim = [xLoLim xHiLim];
 % create flow plot object
 plotFlowObj = plot(flowVals(:,:,1),altVals(:,1,1),'k-',...
     'linewidth',1);
-legend(plotFlowObj,'Flow');
+% legend(plotFlowObj,'Flow');
 
 if regDataAvailable
     pMeanData = gobjects;
@@ -98,13 +98,13 @@ if regDataAvailable
         pSampData(ii) = plot(regRes(ii).dataSamp.Data(2,1,1),...
             regRes(ii).dataSamp.Data(1,1,1),'mo');
     end
-    legend([plotFlowObj;pMeanData(:)],[{'Flow'},{regRes(:).legend}]);
+%     legend([plotFlowObj;pMeanData(:)],[{'Flow'},{regRes(:).legend}]);
     
 end
 
 % make animation
 % val = struct('cdata',uint8(zeros(840,1680,3)),'colormap',[]);
-val = struct('cdata',uint8(zeros(525,700,3)),'colormap',[]);
+% val = struct('cdata',uint8(zeros(525,700,3)),'colormap',[]);
 val(1) = acquireFrame;
 
 for ii = 2:nTs
@@ -138,6 +138,6 @@ end
 
 function F = acquireFrame()
 F = getframe;
-% cdata = print('-RGBImage','-r120');
-% F = im2frame(cdata);
+cdata = print('-RGBImage','-r120');
+F = im2frame(cdata);
 end

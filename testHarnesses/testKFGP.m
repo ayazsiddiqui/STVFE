@@ -355,7 +355,7 @@ for ii = 1:nSamp
     
 end
 
-SR.powerRunningAvg = nan(1,nSamp);
+SR.powerRunningAvg  = nan(1,nSamp);
 SRO.powerRunningAvg = nan(1,nSamp);
 SRB.powerRunningAvg = nan(1,nSamp);
 

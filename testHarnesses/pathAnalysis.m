@@ -95,7 +95,7 @@ folderName = [pwd,'\steadySweepOutputs\'];
 
 
 %% path param
-nPoints = 101;
+nPoints = 201;
 pathParam = linspace(0,2*pi,nPoints);
 
 % tangent pitch angle
@@ -219,6 +219,22 @@ set(gcf,'InnerPosition',1*[-00 -00 560 1.8*420])
 
 spAxes(1).YLabel.Position(1) = spAxes(2).YLabel.Position(1);
 spAxes(3).YLabel.Position(1) = spAxes(2).YLabel.Position(1);
+
+fIdx = fIdx+1;
+figure(fIdx);
+subplot(2,1,1)
+plot(pathParam./(2*pi),solVals.vH_path);
+ylabel('Speed [m/s]');
+xlabel('Path parameter [-]');
+grid on;
+
+subplot(2,1,2);
+pCons = 0.5*cIn.fluidDensity*cIn.turbArea*cIn.turbCP/1000;
+plot(pathParam./(2*pi),pCons*max(0,-solVals.B_Vapp_path(1,:)).^3);
+ylabel('Power [kW]')
+xlabel('Path parameter [-]');
+grid on;
+
 
 %% animation functions
 fIdx = fIdx+1;
